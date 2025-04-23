@@ -7,8 +7,8 @@ import './App.css';
 import AdminDashboard from './components/AdminDashboard';
 
 // Google Calendar API 설정
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
+const CLIENT_ID = '708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyDP1oS9-qS2Jw4apFWfkcj41Z4E9h2Xhxs';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
