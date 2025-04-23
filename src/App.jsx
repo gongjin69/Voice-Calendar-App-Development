@@ -18,8 +18,6 @@ const MASTER_ADMIN_EMAIL = 'cspark69@ewckids.com';
 
 function App() {
   const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
-  const [gapiInited, setGapiInited] = useState(false);
-  const [gisInited, setGisInited] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [eventId, setEventId] = useState(null);
   const [events, setEvents] = useState([]);
@@ -32,42 +30,201 @@ function App() {
   const [isTestUser, setIsTestUser] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
 
-  // Google API 이벤트 리스너 등록
+  // Google 로그인 상태 및 API 초기화 확인
   useEffect(() => {
-    console.log('Google API 이벤트 리스너 설정 중...');
-    
-    // 이미 초기화된 경우 확인
-    if (window.gapiReady) {
-      console.log('GAPI가 이미 초기화되어 있습니다.');
-      setGapiInited(true);
-    }
-    
-    if (window.gisReady) {
-      console.log('GIS가 이미 초기화되어 있습니다.');
-      setGisInited(true);
-    }
+    const initGoogleSignIn = () => {
+      try {
+        if (window.gapi && window.gapi.auth2) {
+          console.log('Google Auth2 이미 초기화됨');
+          return;
+        }
 
-    // GAPI 로드 이벤트 리스너
-    const handleGapiLoaded = () => {
-      console.log('GAPI 로드 이벤트 감지');
-      setGapiInited(true);
+        console.log('Google Sign-In 초기화 중...');
+        window.gapi.load('auth2', () => {
+          window.gapi.auth2.init({
+            client_id: '708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com',
+            scope: 'profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly'
+          }).then(() => {
+            console.log('Google Sign-In 초기화 완료');
+            // 로그인 상태 확인
+            const auth2 = window.gapi.auth2.getAuthInstance();
+            if (auth2.isSignedIn.get()) {
+              handleSignInSuccess(auth2.currentUser.get());
+            }
+            
+            // 로그인 상태 변경 리스너
+            auth2.isSignedIn.listen((isSignedIn) => {
+              if (isSignedIn) {
+                handleSignInSuccess(auth2.currentUser.get());
+              } else {
+                handleSignOut();
+              }
+            });
+          }).catch(err => {
+            console.error('Google Sign-In 초기화 오류:', err);
+          });
+        });
+      } catch (error) {
+        console.error('Google Sign-In 초기화 실패:', error);
+      }
     };
+
+    // Google API 스크립트 로드 확인
+    if (window.gapi) {
+      initGoogleSignIn();
+    } else {
+      // API 로드 대기
+      const checkGapiLoaded = setInterval(() => {
+        if (window.gapi) {
+          clearInterval(checkGapiLoaded);
+          initGoogleSignIn();
+        }
+      }, 1000);
+      
+      // 30초 후 타임아웃
+      setTimeout(() => {
+        clearInterval(checkGapiLoaded);
+        console.error('Google API 로드 타임아웃');
+      }, 30000);
+    }
+  }, []);
+
+  // Google 로그인 성공 처리
+  const handleSignInSuccess = (googleUser) => {
+    try {
+      const profile = googleUser.getBasicProfile();
+      const email = profile.getEmail();
+      console.log('로그인 성공:', email);
+      setUserEmail(email);
+      setIsSignedIn(true);
+      
+      // 캘린더 API 초기화
+      window.gapi.load('client', async () => {
+        try {
+          await window.gapi.client.init({
+            apiKey: 'AIzaSyDP1oS9-qS2Jw4apFWfkcj41Z4E9h2Xhxs',
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+          });
+          console.log('Calendar API 초기화 완료');
+          fetchRecentEvents();
+        } catch (error) {
+          console.error('Calendar API 초기화 오류:', error);
+        }
+      });
+    } catch (error) {
+      console.error('프로필 정보 가져오기 오류:', error);
+    }
+  };
+
+  // 로그인 처리
+  const handleSignIn = () => {
+    try {
+      if (!window.gapi || !window.gapi.auth2) {
+        console.error('Google API가 로드되지 않았습니다.');
+        return;
+      }
+      
+      const auth2 = window.gapi.auth2.getAuthInstance();
+      auth2.signIn().catch(error => {
+        console.error('로그인 오류:', error);
+      });
+    } catch (error) {
+      console.error('로그인 시도 오류:', error);
+    }
+  };
+
+  // 로그아웃 처리
+  const handleSignOut = () => {
+    try {
+      if (window.gapi && window.gapi.auth2) {
+        window.gapi.auth2.getAuthInstance().signOut();
+      }
+      setIsSignedIn(false);
+      setUserEmail('');
+      setEvents([]);
+      setEventId(null);
+    } catch (error) {
+      console.error('로그아웃 오류:', error);
+    }
+  };
+
+  // 로그인 버튼 렌더링
+  const renderLoginButton = () => {
+    if (!isSignedIn) {
+      return (
+        <div>
+          <button onClick={handleSignIn} className="login-button">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
+              alt="구글 로고" 
+              style={{ width: '20px', height: '20px', marginRight: '10px' }}
+            />
+            구글 로그인
+          </button>
+          {/* 대체 로그인 버튼 - 직접 렌더링되도록 div에 표시 */}
+          <div id="google-signin-button" style={{ marginTop: '20px' }}></div>
+        </div>
+      );
+    }
     
-    // GIS 로드 이벤트 리스너
-    const handleGisLoaded = () => {
-      console.log('GIS 로드 이벤트 감지');
-      setGisInited(true);
-    };
-    
-    // 이벤트 리스너 등록
-    document.addEventListener('gapi-loaded', handleGapiLoaded);
-    document.addEventListener('gis-loaded', handleGisLoaded);
-    
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
-    return () => {
-      document.removeEventListener('gapi-loaded', handleGapiLoaded);
-      document.removeEventListener('gis-loaded', handleGisLoaded);
-    };
+    return (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img 
+            src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
+            alt="사용자 아바타"
+            style={{ 
+              width: '40px', 
+              height: '40px', 
+              borderRadius: '50%',
+              border: '2px solid white'
+            }}
+          />
+          <span style={{ color: '#333' }}>{userEmail}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {isAdmin && (
+            <button 
+              onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+              className="admin-button"
+              style={{ 
+                backgroundColor: showAdminDashboard ? 'var(--warning-color)' : 'var(--secondary-color)',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {showAdminDashboard ? '일반 모드로 전환' : '관리자 모드로 전환'}
+            </button>
+          )}
+          <button 
+            onClick={handleSignOut} 
+            className="login-button"
+            style={{ width: 'auto', padding: '8px 16px' }}
+          >
+            🔓 로그아웃
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Google Sign-In 버튼 렌더링
+  useEffect(() => {
+    // Google 로그인 버튼 렌더링
+    if (window.gapi && document.getElementById('google-signin-button')) {
+      window.gapi.signin2.render('google-signin-button', {
+        'scope': 'profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
+        'width': 240,
+        'height': 50,
+        'longtitle': true,
+        'theme': 'dark',
+        'onsuccess': handleSignInSuccess,
+        'onfailure': (error) => console.error('Google Sign-In 실패:', error)
+      });
+    }
   }, []);
 
   // Check server connection
@@ -104,61 +261,6 @@ function App() {
       checkApprovalStatus();
     }
   }, [userEmail]);
-
-  const handleLogin = async () => {
-    if (!gapiInited || !gisInited) {
-      console.error('Google API가 아직 초기화되지 않았습니다.');
-      alert('잠시 후 다시 시도해주세요. Google API를 초기화하는 중입니다.');
-      return;
-    }
-
-    try {
-      console.log('로그인 시도 중...');
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: window.googleConfig.clientId,
-        scope: SCOPES,
-        callback: async (response) => {
-          if (response.error !== undefined) {
-            console.error('OAuth 오류:', response);
-            throw response;
-          }
-          setIsSignedIn(true);
-          await fetchUserInfo();
-          await fetchRecentEvents();
-        },
-      });
-
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    } catch (error) {
-      console.error('로그인 오류:', error);
-      alert('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
-  };
-
-  const fetchUserInfo = async () => {
-    try {
-      const response = await window.gapi.client.oauth2.userinfo.get();
-      setUserEmail(response.result.email);
-    } catch (error) {
-      console.error('사용자 정보 조회 실패:', error);
-    }
-  };
-
-  const handleLogout = () => {
-    try {
-      const token = gapi.client.getToken();
-      if (token !== null) {
-        google.accounts.oauth2.revoke(token.access_token);
-        gapi.client.setToken('');
-        setIsSignedIn(false);
-        setEventId(null);
-        setEvents([]);
-        setUserEmail('');
-      }
-    } catch (error) {
-      console.error('로그아웃 오류:', error);
-    }
-  };
 
   const fetchRecentEvents = async () => {
     if (!isSignedIn) return;
@@ -393,73 +495,6 @@ function App() {
       )}
     </div>
   );
-
-  // 로그인 버튼 렌더링
-  const renderLoginButton = () => {
-    if (isSignedIn) {
-      return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img 
-              src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
-              alt="사용자 아바타"
-              style={{ 
-                width: '40px', 
-                height: '40px', 
-                borderRadius: '50%',
-                border: '2px solid white'
-              }}
-            />
-            <span style={{ color: '#333' }}>{userEmail}</span>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {isAdmin && (
-              <button 
-                onClick={() => setShowAdminDashboard(!showAdminDashboard)}
-                className="admin-button"
-                style={{ 
-                  backgroundColor: showAdminDashboard ? 'var(--warning-color)' : 'var(--secondary-color)',
-                  color: 'white',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                {showAdminDashboard ? '일반 모드로 전환' : '관리자 모드로 전환'}
-              </button>
-            )}
-            <button 
-              onClick={handleLogout} 
-              className="login-button"
-              style={{ width: 'auto', padding: '8px 16px' }}
-            >
-              🔓 로그아웃
-            </button>
-          </div>
-        </div>
-      );
-    }
-    
-    if (!gapiInited || !gisInited) {
-      return (
-        <button disabled className="login-button" style={{ opacity: 0.7 }}>
-          초기화 중...
-        </button>
-      );
-    }
-    
-    return (
-      <button onClick={handleLogin} className="login-button">
-        <img 
-          src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
-          alt="구글 로고" 
-          style={{ width: '20px', height: '20px', marginRight: '10px' }}
-        />
-        구글 로그인
-      </button>
-    );
-  };
 
   if (!browserSupportsSpeechRecognition) {
     return (

@@ -8,47 +8,10 @@
     <meta name="theme-color" content="#4285f4" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
     <title>음성 일정 관리 | EWC Kids</title>
-    <script>
-      // Google API 초기화를 위한 전역 변수 설정
-      window.googleConfig = {
-        apiKey: 'AIzaSyDP1oS9-qS2Jw4apFWfkcj41Z4E9h2Xhxs',
-        clientId: '708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com',
-        discoveryDoc: 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
-      };
-      
-      // GAPI 로드 콜백
-      function gapiLoaded() {
-        console.log('GAPI 로드됨');
-        if (window.gapi) {
-          window.gapi.load('client', initializeGapiClient);
-        }
-      }
-
-      // GAPI 클라이언트 초기화
-      async function initializeGapiClient() {
-        try {
-          console.log('GAPI 클라이언트 초기화 중...');
-          await window.gapi.client.init({
-            apiKey: window.googleConfig.apiKey,
-            discoveryDocs: [window.googleConfig.discoveryDoc],
-          });
-          console.log('GAPI 클라이언트 초기화 완료');
-          window.gapiReady = true;
-          document.dispatchEvent(new Event('gapi-loaded'));
-        } catch (err) {
-          console.error('GAPI 초기화 오류:', err);
-        }
-      }
-
-      // GSI 클라이언트 로드 콜백
-      function gisLoaded() {
-        console.log('GSI 로드됨');
-        window.gisReady = true;
-        document.dispatchEvent(new Event('gis-loaded'));
-      }
-    </script>
-    <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <!-- Google 인증 원클릭 버튼용 메타 태그 -->
+    <meta name="google-signin-client_id" content="708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com">
+    <!-- Google API 스크립트 -->
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
   </head>
   <body>
     <div id="root"></div>
