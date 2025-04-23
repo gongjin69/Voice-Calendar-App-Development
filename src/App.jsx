@@ -7,8 +7,8 @@ import './App.css';
 import AdminDashboard from './components/AdminDashboard';
 
 // Google Calendar API 설정
-const CLIENT_ID = '708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyDP1oS9-qS2Jw4apFWfkcj41Z4E9h2Xhxs';
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
@@ -40,9 +40,10 @@ function App() {
         }
 
         console.log('Google Sign-In 초기화 중...');
+        console.log('사용하는 CLIENT_ID:', CLIENT_ID);
         window.gapi.load('auth2', () => {
           window.gapi.auth2.init({
-            client_id: '708893814495-t2kp3kijss0o4fk0qpnvfghl6igbr4du.apps.googleusercontent.com',
+            client_id: CLIENT_ID,
             scope: 'profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly'
           }).then(() => {
             console.log('Google Sign-In 초기화 완료');
@@ -102,7 +103,7 @@ function App() {
       window.gapi.load('client', async () => {
         try {
           await window.gapi.client.init({
-            apiKey: 'AIzaSyDP1oS9-qS2Jw4apFWfkcj41Z4E9h2Xhxs',
+            apiKey: API_KEY,
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
           });
           console.log('Calendar API 초기화 완료');
