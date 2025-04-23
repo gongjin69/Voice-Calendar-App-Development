@@ -29,65 +29,72 @@ function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [isTestUser, setIsTestUser] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
+  const [isGapiInitialized, setIsGapiInitialized] = useState(false);
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false);
+  const [authInstance, setAuthInstance] = useState(null);
 
-  // Google 로그인 상태 및 API 초기화 확인
+  // Google API 초기화
   useEffect(() => {
-    const initGoogleSignIn = () => {
-      try {
-        if (window.gapi && window.gapi.auth2) {
-          console.log('Google Auth2 이미 초기화됨');
-          return;
-        }
-
-        console.log('Google Sign-In 초기화 중...');
-        console.log('사용하는 CLIENT_ID:', CLIENT_ID);
-        window.gapi.load('auth2', () => {
-          window.gapi.auth2.init({
-            client_id: CLIENT_ID,
-            scope: 'profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly'
-          }).then(() => {
-            console.log('Google Sign-In 초기화 완료');
-            // 로그인 상태 확인
-            const auth2 = window.gapi.auth2.getAuthInstance();
-            if (auth2.isSignedIn.get()) {
-              handleSignInSuccess(auth2.currentUser.get());
-            }
-            
-            // 로그인 상태 변경 리스너
-            auth2.isSignedIn.listen((isSignedIn) => {
-              if (isSignedIn) {
-                handleSignInSuccess(auth2.currentUser.get());
-              } else {
-                handleSignOut();
-              }
-            });
-          }).catch(err => {
-            console.error('Google Sign-In 초기화 오류:', err);
-          });
-        });
-      } catch (error) {
-        console.error('Google Sign-In 초기화 실패:', error);
+    console.log("Google API 초기화 시작");
+    
+    const loadGoogleAPI = () => {
+      if (!window.gapi) {
+        console.log("Google API가 로드되지 않음, 다시 시도 중");
+        setTimeout(loadGoogleAPI, 1000);
+        return;
       }
+
+      // API 클라이언트 초기화
+      window.gapi.load('client:auth2', async () => {
+        try {
+          console.log("Google API 클라이언트 초기화 중");
+          await window.gapi.client.init({
+            apiKey: window.googleConfig?.apiKey || import.meta.env.VITE_GOOGLE_API_KEY,
+            clientId: window.googleConfig?.clientId || import.meta.env.VITE_GOOGLE_CLIENT_ID,
+            discoveryDocs: window.googleConfig?.discoveryDocs || ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+            scope: window.googleConfig?.scopes || 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email'
+          });
+
+          const auth = window.gapi.auth2.getAuthInstance();
+          setAuthInstance(auth);
+          setIsGapiInitialized(true);
+          setIsAuthInitialized(true);
+          console.log("Google API 초기화 완료");
+
+          // 로그인 상태 확인
+          if (auth.isSignedIn.get()) {
+            console.log("사용자가 이미 로그인됨");
+            handleSignInSuccess(auth.currentUser.get());
+          }
+
+          // 로그인 상태 변경 리스너
+          auth.isSignedIn.listen((isSignedIn) => {
+            if (isSignedIn) {
+              handleSignInSuccess(auth.currentUser.get());
+            } else {
+              handleSignOut();
+            }
+          });
+        } catch (error) {
+          console.error("Google API 초기화 오류:", error);
+          setIsGapiInitialized(false);
+          setIsAuthInitialized(false);
+          
+          // 오류 메시지 표시
+          if (document.getElementById('google-auth-error')) {
+            document.getElementById('google-auth-error').textContent = 
+              "Google API 초기화 오류: " + (error.details || error.message || JSON.stringify(error));
+            document.getElementById('google-auth-error').style.display = 'block';
+          }
+          
+          if (window.handleGoogleAuthError) {
+            window.handleGoogleAuthError(error);
+          }
+        }
+      });
     };
 
-    // Google API 스크립트 로드 확인
-    if (window.gapi) {
-      initGoogleSignIn();
-    } else {
-      // API 로드 대기
-      const checkGapiLoaded = setInterval(() => {
-        if (window.gapi) {
-          clearInterval(checkGapiLoaded);
-          initGoogleSignIn();
-        }
-      }, 1000);
-      
-      // 30초 후 타임아웃
-      setTimeout(() => {
-        clearInterval(checkGapiLoaded);
-        console.error('Google API 로드 타임아웃');
-      }, 30000);
-    }
+    loadGoogleAPI();
   }, []);
 
   // Google 로그인 성공 처리
@@ -98,47 +105,51 @@ function App() {
       console.log('로그인 성공:', email);
       setUserEmail(email);
       setIsSignedIn(true);
-      
-      // 캘린더 API 초기화
-      window.gapi.load('client', async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-          });
-          console.log('Calendar API 초기화 완료');
-          fetchRecentEvents();
-        } catch (error) {
-          console.error('Calendar API 초기화 오류:', error);
-        }
-      });
+      fetchRecentEvents();
     } catch (error) {
       console.error('프로필 정보 가져오기 오류:', error);
+      if (window.handleGoogleAuthError) {
+        window.handleGoogleAuthError(error);
+      }
     }
   };
 
   // 로그인 처리
   const handleSignIn = () => {
+    if (!isGapiInitialized || !isAuthInitialized) {
+      console.error("Google API가 초기화되지 않았습니다");
+      alert("Google API 초기화 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
     try {
-      if (!window.gapi || !window.gapi.auth2) {
-        console.error('Google API가 로드되지 않았습니다.');
-        return;
+      if (authInstance) {
+        console.log("로그인 시도 중");
+        authInstance.signIn({
+          ux_mode: 'popup',
+          prompt: 'select_account'
+        }).catch(error => {
+          console.error('로그인 오류:', error);
+          if (window.handleGoogleAuthError) {
+            window.handleGoogleAuthError(error);
+          }
+        });
+      } else {
+        console.error("인증 인스턴스가 없습니다");
       }
-      
-      const auth2 = window.gapi.auth2.getAuthInstance();
-      auth2.signIn().catch(error => {
-        console.error('로그인 오류:', error);
-      });
     } catch (error) {
       console.error('로그인 시도 오류:', error);
+      if (window.handleGoogleAuthError) {
+        window.handleGoogleAuthError(error);
+      }
     }
   };
 
   // 로그아웃 처리
   const handleSignOut = () => {
     try {
-      if (window.gapi && window.gapi.auth2) {
-        window.gapi.auth2.getAuthInstance().signOut();
+      if (authInstance) {
+        authInstance.signOut();
       }
       setIsSignedIn(false);
       setUserEmail('');
@@ -154,16 +165,23 @@ function App() {
     if (!isSignedIn) {
       return (
         <div>
-          <button onClick={handleSignIn} className="login-button">
+          <button 
+            onClick={handleSignIn} 
+            className="login-button"
+            disabled={!isGapiInitialized || !isAuthInitialized}
+          >
             <img 
               src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
               alt="구글 로고" 
               style={{ width: '20px', height: '20px', marginRight: '10px' }}
             />
-            구글 로그인
+            {!isGapiInitialized || !isAuthInitialized ? '초기화 중...' : '구글 로그인'}
           </button>
-          {/* 대체 로그인 버튼 - 직접 렌더링되도록 div에 표시 */}
-          <div id="google-signin-button" style={{ marginTop: '20px' }}></div>
+          <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
+            {!isGapiInitialized || !isAuthInitialized ? 
+              '구글 API를 초기화하는 중입니다. 잠시만 기다려주세요.' : 
+              '구글 계정으로 로그인하여 음성 일정 관리 서비스를 이용하세요.'}
+          </p>
         </div>
       );
     }
@@ -211,22 +229,6 @@ function App() {
       </div>
     );
   };
-
-  // Google Sign-In 버튼 렌더링
-  useEffect(() => {
-    // Google 로그인 버튼 렌더링
-    if (window.gapi && document.getElementById('google-signin-button')) {
-      window.gapi.signin2.render('google-signin-button', {
-        'scope': 'profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
-        'width': 240,
-        'height': 50,
-        'longtitle': true,
-        'theme': 'dark',
-        'onsuccess': handleSignInSuccess,
-        'onfailure': (error) => console.error('Google Sign-In 실패:', error)
-      });
-    }
-  }, []);
 
   // Check server connection
   useEffect(() => {

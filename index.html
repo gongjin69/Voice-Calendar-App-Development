@@ -8,13 +8,32 @@
     <meta name="theme-color" content="#4285f4" />
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
     <title>음성 일정 관리 | EWC Kids</title>
-    <!-- Google 인증 원클릭 버튼용 메타 태그 -->
-    <meta name="google-signin-client_id" content="1013074395482-u7uq1tavr0fodg0an454k609qmot57ac.apps.googleusercontent.com">
-    <!-- Google API 스크립트 -->
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <!-- Google API 직접 로드 -->
+    <script>
+      // 구글 API 설정
+      window.googleConfig = {
+        apiKey: 'AIzaSyAmt5-72N9yZCMp_zpmGdX8T-I90knNvKw',
+        clientId: '1013074395482-u7uq1tavr0fodg0an454k609qmot57ac.apps.googleusercontent.com',
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+        scopes: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email'
+      };
+
+      // 현재 URL 로깅
+      console.log('현재 페이지 URL:', window.location.href);
+      
+      // 오류 디버깅을 위한 함수
+      function handleGoogleAuthError(error) {
+        console.error('Google Auth 오류:', error);
+        document.getElementById('google-auth-error').textContent = 
+          '인증 오류: ' + (error.error || JSON.stringify(error));
+        document.getElementById('google-auth-error').style.display = 'block';
+      }
+    </script>
+    <script src="https://apis.google.com/js/api.js"></script>
   </head>
   <body>
     <div id="root"></div>
+    <div id="google-auth-error" style="display:none; background-color:#ffeeee; color:red; padding:10px; margin:10px; border-radius:5px;"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
