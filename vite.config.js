@@ -1,32 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5173,
     host: true,
-    port: 5174,
-    strictPort: true,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_BASE_URL || 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-      }
-    }
+    cors: true
+  },
+  preview: {
+    port: 5173,
+    host: true,
+    cors: true
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    assetsInlineLimit: 0,
     rollupOptions: {
       output: {
-        format: 'es',
-        entryFileNames: 'assets/[name]-[hash].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
-      }
-    }
+        manualChunks: undefined,
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]',
+      },
+    },
   },
   optimizeDeps: {
     esbuildOptions: {

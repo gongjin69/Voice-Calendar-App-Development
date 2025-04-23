@@ -3,17 +3,18 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": { "includeFiles": ["dist/**", "prisma/**"] }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server/routes/$1"
+      "dest": "/server/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/server/index.js"
     }
   ],
   "env": {
@@ -23,6 +24,7 @@
     "VITE_API_BASE_URL": "@api_base_url",
     "EMAIL_USER": "@email_user",
     "EMAIL_PASSWORD": "@email_password",
-    "EMAIL_APPROVAL_TOKEN": "@email_approval_token"
+    "EMAIL_APPROVAL_TOKEN": "@email_approval_token",
+    "GOOGLE_CLIENT_SECRET": "@google_client_secret"
   }
 } 
