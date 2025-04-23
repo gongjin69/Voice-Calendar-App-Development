@@ -35,13 +35,29 @@ function App() {
   useEffect(() => {
     const loadGoogleAPI = async () => {
       try {
+        console.log('Google API 로드 시작...');
+        
+        // 이미 로드된 경우 다시 로드하지 않음
+        if (window.gapi) {
+          console.log('GAPI가 이미 로드되어 있습니다.');
+          setGapiInited(true);
+          return;
+        }
+        
         // Load the Google API client library
         await new Promise((resolve, reject) => {
           const script = document.createElement('script');
           script.src = 'https://apis.google.com/js/api.js';
           script.async = true;
-          script.onload = resolve;
-          script.onerror = reject;
+          script.defer = true;
+          script.onload = () => {
+            console.log('GAPI 스크립트 로드 완료');
+            resolve();
+          };
+          script.onerror = (error) => {
+            console.error('GAPI 스크립트 로드 실패:', error);
+            reject(error);
+          };
           document.body.appendChild(script);
         });
 
@@ -50,22 +66,44 @@ function App() {
           const script = document.createElement('script');
           script.src = 'https://accounts.google.com/gsi/client';
           script.async = true;
-          script.onload = resolve;
-          script.onerror = reject;
+          script.defer = true;
+          script.onload = () => {
+            console.log('GIS 스크립트 로드 완료');
+            resolve();
+          };
+          script.onerror = (error) => {
+            console.error('GIS 스크립트 로드 실패:', error);
+            reject(error);
+          };
           document.body.appendChild(script);
         });
 
-        await window.gapi.load('client', async () => {
+        // GAPI 초기화를 위해 잠시 대기
+        console.log('GAPI 초기화 중...');
+        setTimeout(async () => {
           try {
-            await window.gapi.client.init({
-              apiKey: API_KEY,
-              discoveryDocs: [DISCOVERY_DOC],
+            if (!window.gapi) {
+              console.error('GAPI 객체가 없습니다.');
+              return;
+            }
+            
+            await window.gapi.load('client', async () => {
+              try {
+                console.log('GAPI 클라이언트 초기화 중...');
+                await window.gapi.client.init({
+                  apiKey: API_KEY,
+                  discoveryDocs: [DISCOVERY_DOC],
+                });
+                console.log('GAPI 초기화 완료!');
+                setGapiInited(true);
+              } catch (err) {
+                console.error('GAPI 초기화 오류:', err);
+              }
             });
-            setGapiInited(true);
-          } catch (error) {
-            console.error('GAPI 초기화 오류:', error);
+          } catch (err) {
+            console.error('GAPI 로드 오류:', err);
           }
-        });
+        }, 1000);
 
         setGisInited(true);
       } catch (error) {
@@ -396,6 +434,73 @@ function App() {
     </div>
   );
 
+  // 로그인 버튼 렌더링
+  const renderLoginButton = () => {
+    if (isSignedIn) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img 
+              src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
+              alt="사용자 아바타"
+              style={{ 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '50%',
+                border: '2px solid white'
+              }}
+            />
+            <span style={{ color: '#333' }}>{userEmail}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {isAdmin && (
+              <button 
+                onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                className="admin-button"
+                style={{ 
+                  backgroundColor: showAdminDashboard ? 'var(--warning-color)' : 'var(--secondary-color)',
+                  color: 'white',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {showAdminDashboard ? '일반 모드로 전환' : '관리자 모드로 전환'}
+              </button>
+            )}
+            <button 
+              onClick={handleLogout} 
+              className="login-button"
+              style={{ width: 'auto', padding: '8px 16px' }}
+            >
+              🔓 로그아웃
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    if (!gapiInited || !gisInited) {
+      return (
+        <button disabled className="login-button" style={{ opacity: 0.7 }}>
+          초기화 중...
+        </button>
+      );
+    }
+    
+    return (
+      <button onClick={handleLogin} className="login-button">
+        <img 
+          src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
+          alt="구글 로고" 
+          style={{ width: '20px', height: '20px', marginRight: '10px' }}
+        />
+        구글 로그인
+      </button>
+    );
+  };
+
   if (!browserSupportsSpeechRecognition) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
@@ -486,61 +591,7 @@ function App() {
           </div>
         </div>
 
-        {!gapiInited || !gisInited ? (
-          <button disabled className="login-button">
-            초기화 중...
-          </button>
-        ) : isSignedIn ? (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <img 
-                src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
-                alt="사용자 아바타"
-                style={{ 
-                  width: '40px', 
-                  height: '40px', 
-                  borderRadius: '50%',
-                  border: '2px solid white'
-                }}
-              />
-              <span style={{ color: '#333' }}>{userEmail}</span>
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {isAdmin && (
-                <button 
-                  onClick={() => setShowAdminDashboard(!showAdminDashboard)}
-                  className="admin-button"
-                  style={{ 
-                    backgroundColor: showAdminDashboard ? 'var(--warning-color)' : 'var(--secondary-color)',
-                    color: 'white',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {showAdminDashboard ? '일반 모드로 전환' : '관리자 모드로 전환'}
-                </button>
-              )}
-              <button 
-                onClick={handleLogout} 
-                className="login-button"
-                style={{ width: 'auto', padding: '8px 16px' }}
-              >
-                🔓 로그아웃
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={handleLogin} className="login-button">
-            <img 
-              src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
-              alt="구글 로고" 
-              style={{ width: '20px', height: '20px', marginRight: '10px' }}
-            />
-            구글 로그인
-          </button>
-        )}
+        {renderLoginButton()}
 
         {isSignedIn && (
           <>
