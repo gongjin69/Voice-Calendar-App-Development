@@ -1,130 +1,241 @@
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --primary-color: #4285f4;
+  --secondary-color: #34a853;
+  --danger-color: #ea4335;
+  --warning-color: #fbbc05;
+  --background-color: #ffffff;
+  --light-background: #f8f9fa;
+  --text-color: #202124;
+  --border-radius: 12px;
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  background-color: #f5f5f5;
 }
 
 #root {
-  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  color: white;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.25s;
-  margin: 5px;
+  transition: all 0.2s ease;
+  width: 100%;
+  margin: 8px 0;
 }
 
-button:hover {
-  border-color: #646cff;
+button:active {
+  transform: scale(0.98);
 }
 
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.login-button {
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  font-size: 1rem;
+  border-radius: 24px;
+  padding: 0 24px;
 }
 
-.settings-section {
-  background-color: #f5f5f5;
-  padding: 1rem;
-  border-radius: 8px;
-  margin: 1rem 0;
+.voice-control-section {
+  background: white;
+  padding: 24px;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  margin: 16px 0;
 }
 
-.settings-section h3 {
-  margin: 0 0 1rem 0;
+.voice-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.voice-buttons button {
+  height: 48px;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.transcript-box {
+  background: var(--light-background);
+  padding: 20px;
+  border-radius: var(--border-radius);
+  margin: 16px 0;
+  min-height: 100px;
+}
+
+.event-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.event-list {
+  background: white;
+  padding: 24px;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  margin: 16px 0;
+}
+
+.event-item {
+  background: white;
+  padding: 20px;
+  border-radius: var(--border-radius);
+  margin: 12px 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.event-item:active {
+  transform: scale(0.98);
+}
+
+.event-item h3 {
+  font-size: 1.1rem;
+  margin-bottom: 12px;
   color: #333;
 }
 
-.notification-settings {
-  background-color: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 8px;
-  margin: 1rem 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.notification-settings h3 {
-  margin: 0 0 1rem 0;
-  color: #2c3e50;
-  font-size: 1.25rem;
-}
-
-.notification-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.notification-controls label {
+.event-time {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 6px 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  color: #4a5568;
-  cursor: pointer;
+  gap: 6px;
 }
 
-.notification-controls input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #4a90e2;
+.calendar-tag {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  background: var(--light-background);
+  color: #666;
 }
 
-.phone-input {
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
-  width: 100%;
-  max-width: 300px;
-  transition: border-color 0.2s;
+.selected-event {
+  background: #e8f0fe;
+  border-color: var(--primary-color);
 }
 
-.phone-input:focus {
-  outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+.error-message {
+  background: #fee8e6;
+  color: var(--danger-color);
+  padding: 20px;
+  border-radius: var(--border-radius);
+  margin: 16px 0;
+  text-align: center;
 }
 
-.phone-input::placeholder {
-  color: #a0aec0;
+.refresh-button {
+  background: var(--primary-color);
+  color: white;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 0.9rem;
 }
 
-.notification-message {
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  margin-top: 1rem;
-  background-color: #ebf8ff;
-  color: #2b6cb0;
-  border: 1px solid #bee3f8;
+.start-button {
+  background: var(--secondary-color);
+  color: white;
 }
 
-.notification-message.success {
-  background-color: #f0fff4;
-  color: #2f855a;
-  border-color: #c6f6d5;
+.stop-button {
+  background: var(--danger-color);
+  color: white;
 }
 
-.notification-message.error {
-  background-color: #fff5f5;
-  color: #c53030;
-  border-color: #fed7d7;
+.reset-button {
+  background: var(--warning-color);
+  color: white;
+}
+
+@media (min-width: 768px) {
+  #root {
+    max-width: 768px;
+    padding: 24px;
+  }
+
+  .voice-buttons, .event-controls {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+}
+
+/* 모바일에서의 스크롤 개선 */
+.events-container {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 4px;
+}
+
+.events-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.events-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.events-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+/* 터치 피드백 */
+@media (hover: hover) {
+  button:hover {
+    opacity: 0.9;
+  }
+
+  .event-item:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--box-shadow);
+  }
 }

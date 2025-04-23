@@ -2,7 +2,7 @@ import 'regenerator-runtime/runtime';
 import React, { useEffect, useState } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import axios from 'axios';
-import { sendKakaoNotification } from './utils/kakaoNotification';
+import md5 from 'md5';
 
 // Polyfill for speech recognition
 const SpeechRecognitionPolyfill = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -14,6 +14,31 @@ const CLIENT_ID = '1013074395482-u7uq1tavr0fodg0an454k609qmot57ac.apps.googleuse
 const API_KEY = 'AIzaSyAmt5-72N9yZCMp_zpmGdX8T-I90knNvKw';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+
+// 관리자 이메일 상수 정의
+const ADMIN_EMAIL = 'cspark69@ewckids.com';
+// 테스트 사용자 이메일 목록
+const TEST_USERS = [
+  'cspark69@ewckids.com',
+  'mo@ewckids.com',  // 테스트 사용자 추가
+  // 여기에 다른 테스트 사용자 이메일을 추가할 수 있습니다
+];
+
+// API 기본 URL 설정
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://voice-calendar-app.uc.r.appspot.com'  // Google App Engine URL
+  : 'http://localhost:3001';
+
+// 서버 상태 확인을 위한 함수
+const checkServerConnection = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/health`);
+    setIsServerConnected(response.data.status === 'healthy');
+  } catch (error) {
+    console.error('Server connection check failed:', error);
+    setIsServerConnected(false);
+  }
+};
 
 function App() {
   const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
@@ -31,6 +56,8 @@ function App() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isTestUser, setIsTestUser] = useState(false);
 
   useEffect(() => {
     const loadGoogleAPI = async () => {
@@ -76,6 +103,57 @@ function App() {
     loadGoogleAPI();
   }, []);
 
+  // Check server connection
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/health`);
+        setIsServerConnected(response.data.status === 'ok');
+        console.log('서버 연결 상태:', response.data);
+      } catch (error) {
+        console.error('서버 연결 확인 실패:', error);
+        setIsServerConnected(false);
+      }
+    };
+
+    checkServer();
+    const interval = setInterval(checkServer, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Google 사용자 정보 조회 및 관리자/테스트 사용자 확인 함수
+  const checkUserAccess = async (userEmail) => {
+    try {
+      console.log('Checking access for:', userEmail);
+      // 관리자 이메일인 경우
+      if (userEmail === ADMIN_EMAIL) {
+        console.log('Admin access granted');
+        setIsAdmin(true);
+        setHasAccess(true);
+        return true;
+      }
+
+      // 테스트 사용자인 경우
+      if (TEST_USERS.includes(userEmail)) {
+        console.log('Test user access granted');
+        setIsTestUser(true);
+        setHasAccess(true);
+        return true;
+      }
+
+      // 일반 사용자의 경우 서버에 접근 권한 확인
+      const accessResponse = await axios.get(`${API_BASE_URL}/api/check-access/${userEmail}`);
+      console.log('Server access response:', accessResponse.data);
+      setHasAccess(accessResponse.data.hasAccess);
+      return accessResponse.data.hasAccess;
+    } catch (error) {
+      console.error('사용자 접근 권한 확인 실패:', error);
+      setHasAccess(false);
+      return false;
+    }
+  };
+
+  // 로그인 핸들러 수정
   const handleLogin = async () => {
     if (!gapiInited || !gisInited) {
       console.error('Google API가 아직 초기화되지 않았습니다.');
@@ -87,28 +165,23 @@ function App() {
         client_id: CLIENT_ID,
         scope: SCOPES,
         ux_mode: 'popup',
-        redirect_uri: window.location.origin,
         callback: async (response) => {
           if (response.error !== undefined) {
             console.error('OAuth 오류:', response);
             return;
           }
-          setIsSignedIn(true);
+          
           try {
             // Get user info
             const userInfoResponse = await window.gapi.client.oauth2.userinfo.get();
             const userEmail = userInfoResponse.result.email;
+            setUserEmail(userEmail);
             
-            // Check access
-            const accessResponse = await axios.get(`http://localhost:3001/api/check-access/${userEmail}`);
-            setHasAccess(accessResponse.data.hasAccess);
-            
-            if (!accessResponse.data.hasAccess) {
-              // Request access
-              await axios.post('http://localhost:3001/api/request-access', {
-                email: userEmail,
-                name: userInfoResponse.result.name
-              });
+            // 사용자 접근 권한 확인
+            const hasAccess = await checkUserAccess(userEmail);
+            if (hasAccess) {
+              setIsSignedIn(true);
+              console.log('Login completed for:', userEmail);
             }
           } catch (error) {
             console.error('사용자 정보 조회 실패:', error);
@@ -133,29 +206,16 @@ function App() {
         setIsSignedIn(false);
         setEventId(null);
         setEvents([]);
+        setIsAdmin(false);
+        setIsTestUser(false);
+        setHasAccess(false);
+        setUserEmail('');
+        setUserName('');
       }
     } catch (error) {
       console.error('로그아웃 오류:', error);
     }
   };
-
-  // Check server connection
-  useEffect(() => {
-    const checkServer = async () => {
-      try {
-        const response = await axios.get('http://localhost:3001/api/health');
-        setIsServerConnected(response.data.status === 'ok');
-        console.log('서버 연결 상태:', response.data);
-      } catch (error) {
-        console.error('서버 연결 확인 실패:', error);
-        setIsServerConnected(false);
-      }
-    };
-
-    checkServer();
-    const interval = setInterval(checkServer, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   const fetchRecentEvents = async () => {
     if (!isSignedIn) return;
@@ -163,18 +223,53 @@ function App() {
     setIsLoading(true);
     try {
       const now = new Date();
-      const tenDaysAgo = new Date(now.getTime() - (10 * 24 * 60 * 60 * 1000));
+      // 현재 날짜의 시작 시점으로 설정
+      now.setHours(0, 0, 0, 0);
       
-      const response = await gapi.client.calendar.events.list({
-        calendarId: 'primary',
-        timeMin: tenDaysAgo.toISOString(),
-        timeMax: now.toISOString(),
-        maxResults: 100,
-        orderBy: 'startTime',
-        singleEvents: true,
+      // 향후 10일 후의 날짜 설정
+      const tenDaysLater = new Date(now);
+      tenDaysLater.setDate(now.getDate() + 10);
+      tenDaysLater.setHours(23, 59, 59, 999);
+
+      // 먼저 캘린더 목록을 가져옵니다
+      const calendarList = await gapi.client.calendar.calendarList.list();
+      const calendars = calendarList.result.items || [];
+      
+      // 모든 캘린더에서 일정을 가져옵니다
+      const allEvents = [];
+      
+      for (const calendar of calendars) {
+        try {
+          const response = await gapi.client.calendar.events.list({
+            calendarId: calendar.id,
+            timeMin: now.toISOString(),
+            timeMax: tenDaysLater.toISOString(),
+            maxResults: 100,
+            orderBy: 'startTime',
+            singleEvents: true,
+          });
+          
+          // 각 일정에 캘린더 정보를 추가합니다
+          const eventsWithCalendar = (response.result.items || []).map(event => ({
+            ...event,
+            calendarTitle: calendar.summary,
+            calendarColor: calendar.backgroundColor
+          }));
+          
+          allEvents.push(...eventsWithCalendar);
+        } catch (error) {
+          console.error(`${calendar.summary} 캘린더 일정 조회 실패:`, error);
+        }
+      }
+
+      // 날짜순으로 정렬
+      allEvents.sort((a, b) => {
+        const aTime = new Date(a.start.dateTime || a.start.date);
+        const bTime = new Date(b.start.dateTime || b.start.date);
+        return aTime - bTime;
       });
 
-      setEvents(response.result.items || []);
+      setEvents(allEvents);
     } catch (error) {
       console.error('일정 조회 오류:', error);
       alert('일정을 불러오는 중 오류가 발생했습니다.');
@@ -189,21 +284,6 @@ function App() {
         calendarId: 'primary',
         resource: eventData,
       });
-
-      if (notificationEnabled && phoneNumber) {
-        const eventTime = new Date(eventData.start.dateTime).toLocaleString('ko-KR', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-        await sendKakaoNotification(
-          phoneNumber,
-          eventData.summary,
-          eventTime
-        );
-      }
 
       setEventId(response.result.id);
       await fetchRecentEvents();
@@ -227,7 +307,7 @@ function App() {
       if (match) {
         const [_, month, day, ampm, hour] = match;
         eventDateTime = new Date();
-        eventDateTime.setMonth(parseInt(month) - 1); // 월은 0부터 시작
+        eventDateTime.setMonth(parseInt(month) - 1);
         eventDateTime.setDate(parseInt(day));
         
         let adjustedHour = parseInt(hour);
@@ -253,11 +333,19 @@ function App() {
           dateTime: endDateTime.toISOString(),
           timeZone: 'Asia/Seoul',
         },
+        // 기본 알림 설정 추가
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'email', minutes: 24 * 60 }, // 24시간 전 이메일
+            { method: 'popup', minutes: 60 }, // 1시간 전 팝업
+          ],
+        },
       };
 
       const response = await handleCreateEvent(event);
       setEventId(response.id);
-      alert('✅ 일정이 등록되었습니다!');
+      alert('✅ 일정이 등록되었습니다!\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 1시간 전 팝업 알림');
     } catch (error) {
       console.error('일정 등록 오류:', error);
       alert('일정 등록에 실패했습니다.');
@@ -315,211 +403,261 @@ function App() {
     );
   }
 
-  return (
-    <div style={{ padding: 30, fontFamily: 'Arial', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', color: '#333' }}>🗣 EWC 음성 구글 캘린더 일정관리</h1>
+  if (!isServerConnected) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100vh',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <h2>서버에 연결할 수 없습니다</h2>
+        <p>서버가 실행 중인지 확인해주세요.</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          style={{
+            padding: '10px 20px',
+            marginTop: '20px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          새로고침
+        </button>
+      </div>
+    );
+  }
 
-      {!isServerConnected ? (
-        <div style={{ 
-          padding: '20px', 
-          backgroundColor: '#ffebee', 
-          borderRadius: '5px', 
-          marginBottom: '20px',
-          textAlign: 'center'
-        }}>
-          <p style={{ color: '#c62828', marginBottom: '10px' }}>
-            서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.
-          </p>
-          <button 
-            onClick={() => window.location.reload()}
-            style={{
-              backgroundColor: '#2196f3',
-              color: 'white',
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            새로고침
-          </button>
+  return (
+    <div style={{ 
+      padding: 0, 
+      fontFamily: 'Pretendard', 
+      maxWidth: '100%', 
+      margin: '0 auto',
+      minHeight: '100vh',
+      background: 'linear-gradient(180deg, var(--background-color) 0%, var(--light-background) 100%)'
+    }}>
+      <div style={{
+        padding: '20px',
+        textAlign: 'center',
+        marginBottom: '20px'
+      }}>
+        <div style={{ marginBottom: '20px' }}>
+          <img 
+            src="/ewc-kids-logo.svg" 
+            alt="EWC KIDS" 
+            style={{ 
+              height: '40px',
+              marginBottom: '30px'
+            }} 
+          />
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            gap: '10px'
+          }}>
+            <img 
+              src="/voice-smile.svg" 
+              alt="Voice" 
+              style={{ 
+                height: '40px'
+              }} 
+            />
+            <h1 style={{
+              fontSize: '2rem',
+              fontWeight: 'bold',
+              margin: 0,
+              color: '#333'
+            }}>VOICE 구글캘린더</h1>
+          </div>
         </div>
-      ) : (
-        <div style={{ textAlign: 'right', marginBottom: '20px' }}>
-          {!gapiInited || !gisInited ? (
-            <button disabled style={{ backgroundColor: '#ccc', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'not-allowed' }}>
-              초기화 중...
-            </button>
-          ) : isSignedIn ? (
-            <button onClick={handleLogout} style={{ backgroundColor: '#f44336', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+        {!gapiInited || !gisInited ? (
+          <button disabled className="login-button">
+            초기화 중...
+          </button>
+        ) : isSignedIn ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img 
+                src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
+                alt="User Avatar"
+                style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  borderRadius: '50%',
+                  border: '2px solid white'
+                }}
+              />
+              <span style={{ color: 'white' }}>{userEmail}</span>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="login-button"
+              style={{ width: 'auto', padding: '8px 16px' }}
+            >
               🔓 로그아웃
             </button>
-          ) : (
-            <button onClick={handleLogin} style={{ backgroundColor: '#4285f4', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
-              🔐 Google 로그인
-            </button>
-          )}
-        </div>
-      )}
-
-      {isSignedIn && !hasAccess && (
-        <div style={{ textAlign: 'center', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '10px' }}>
-          <h2>액세스 요청</h2>
-          <p>이 애플리케이션을 사용하기 위해서는 관리자의 승인이 필요합니다.</p>
-          <button
-            onClick={handleLogin}
-            disabled={isRequestingAccess}
-            style={{
-              backgroundColor: '#4285f4',
-              color: 'white',
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: isRequestingAccess ? 'not-allowed' : 'pointer',
-              opacity: isRequestingAccess ? 0.7 : 1
-            }}
-          >
-            {isRequestingAccess ? '요청 처리 중...' : '액세스 요청하기'}
+          </div>
+        ) : (
+          <button onClick={handleLogin} className="login-button">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
+              alt="Google Logo" 
+              style={{ width: '20px', height: '20px' }}
+            />
+            Google 로그인
           </button>
-        </div>
-      )}
+        )}
 
-      {isSignedIn && (
-        <>
-          <div style={{ backgroundColor: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-            <h2>🎤 음성 인식</h2>
-            <p>
-              <strong>🎧 듣는 중:</strong> {listening ? '✅ 예' : '❌ 아니요'}
-            </p>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-              <button 
-                onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' })}
-                style={{ backgroundColor: '#4caf50', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                🎙 말하기 시작
-              </button>
-              <button 
-                onClick={SpeechRecognition.stopListening}
-                style={{ backgroundColor: '#ff5722', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                🛑 멈추기
-              </button>
-              <button 
-                onClick={resetTranscript}
-                style={{ backgroundColor: '#2196f3', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                🔄 초기화
-              </button>
-            </div>
-
-            <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px', marginTop: '10px' }}>
-              <h3>📝 인식된 텍스트</h3>
-              <p style={{ minHeight: '50px' }}>{transcript}</p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button 
-                onClick={createEvent}
-                style={{ backgroundColor: '#4caf50', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                📅 일정 등록
-              </button>
-              <button 
-                onClick={updateEvent}
-                style={{ backgroundColor: '#ffc107', color: 'black', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                ✏️ 일정 수정
-              </button>
-              <button 
-                onClick={deleteEvent}
-                style={{ backgroundColor: '#f44336', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', flex: 1 }}
-              >
-                🗑️ 일정 삭제
-              </button>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#f5f5f5', padding: '20px', borderRadius: '10px' }}>
-            <h2>📅 최근 10일간의 일정</h2>
-            <button 
-              onClick={fetchRecentEvents}
-              style={{ backgroundColor: '#2196f3', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', marginBottom: '15px' }}
-              disabled={isLoading}
+        {isSignedIn && !hasAccess && !isAdmin && !isTestUser && (
+          <div style={{ textAlign: 'center', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '10px' }}>
+            <h2>액세스 요청</h2>
+            <p>이 애플리케이션을 사용하기 위해서는 관리자의 승인이 필요합니다.</p>
+            <button
+              onClick={handleLogin}
+              disabled={isRequestingAccess}
+              style={{
+                backgroundColor: '#4285f4',
+                color: 'white',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: isRequestingAccess ? 'not-allowed' : 'pointer',
+                opacity: isRequestingAccess ? 0.7 : 1
+              }}
             >
-              {isLoading ? '로딩 중...' : '🔄 일정 새로고침'}
+              {isRequestingAccess ? '요청 처리 중...' : '액세스 요청하기'}
             </button>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {events.length > 0 ? (
-                events.map((event) => (
-                  <div 
-                    key={event.id} 
-                    style={{ 
-                      backgroundColor: 'white',
-                      padding: '15px',
-                      marginBottom: '10px',
-                      borderRadius: '5px',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => setEventId(event.id)}
-                  >
-                    <h3 style={{ margin: '0 0 10px 0' }}>{event.summary}</h3>
-                    <p style={{ margin: '5px 0', color: '#666' }}>
-                      🕒 시작: {new Date(event.start.dateTime || event.start.date).toLocaleString()}
-                    </p>
-                    <p style={{ margin: '5px 0', color: '#666' }}>
-                      ⏰ 종료: {new Date(event.end.dateTime || event.end.date).toLocaleString()}
-                    </p>
-                    {eventId === event.id && (
-                      <div style={{ marginTop: '5px', padding: '5px', backgroundColor: '#e3f2fd', borderRadius: '3px' }}>
-                        ✅ 선택됨
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p style={{ textAlign: 'center', color: '#666' }}>
-                  {isLoading ? '일정을 불러오는 중...' : '최근 일정이 없습니다.'}
-                </p>
-              )}
-            </div>
           </div>
+        )}
 
-          <div className="notification-settings">
-            <h3>알림 설정</h3>
-            <div className="notification-controls">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={notificationEnabled}
-                  onChange={(e) => setNotificationEnabled(e.target.checked)}
-                />
-                카카오톡 알림 활성화
-              </label>
-              {notificationEnabled && (
-                <>
-                  <input
-                    type="tel"
-                    className="phone-input"
-                    placeholder="전화번호를 입력하세요 (예: 010-1234-5678)"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}"
-                  />
-                  <small style={{ color: '#666', marginTop: '0.25rem' }}>
-                    형식: 010-1234-5678
-                  </small>
-                </>
-              )}
-            </div>
-            {notificationMessage && (
-              <div className="notification-message">
-                {notificationMessage}
+        {isSignedIn && (
+          <div style={{ padding: '0 20px' }}>
+            <div className="voice-control-section">
+              <h2 style={{ marginBottom: '20px', color: '#333' }}>음성 인식</h2>
+              <p style={{ 
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: listening ? 'var(--secondary-color)' : '#666'
+              }}>
+                🎧 듣는 중: {listening ? '✅' : '❌'}
+              </p>
+              <div className="voice-buttons">
+                <button 
+                  onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' })}
+                  className="start-button"
+                >
+                  🎙️ 말하기
+                </button>
+                <button 
+                  onClick={SpeechRecognition.stopListening}
+                  className="stop-button"
+                >
+                  🛑 멈추기
+                </button>
+                <button 
+                  onClick={resetTranscript}
+                  className="reset-button"
+                >
+                  🔄 초기화
+                </button>
               </div>
-            )}
+
+              <div className="transcript-box">
+                <h3 style={{ marginBottom: '10px', color: '#333' }}>📝 인식된 텍스트</h3>
+                <p style={{ color: '#666' }}>{transcript}</p>
+              </div>
+
+              <div className="event-controls">
+                <button 
+                  onClick={createEvent}
+                  style={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}
+                >
+                  📅 일정 등록
+                </button>
+                <button 
+                  onClick={updateEvent}
+                  style={{ backgroundColor: 'var(--warning-color)', color: 'white' }}
+                >
+                  ✏️ 일정 수정
+                </button>
+                <button 
+                  onClick={deleteEvent}
+                  style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}
+                >
+                  🗑️ 일정 삭제
+                </button>
+              </div>
+            </div>
+
+            <div className="event-list">
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{ color: '#333' }}>📅 최근 일정</h2>
+                <button 
+                  onClick={fetchRecentEvents}
+                  className="refresh-button"
+                  style={{ 
+                    width: 'auto', 
+                    padding: '8px 16px',
+                    marginTop: 0 
+                  }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? '로딩 중...' : '🔄 새로고침'}
+                </button>
+              </div>
+              
+              <div className="events-container">
+                {events.length > 0 ? (
+                  events.map((event) => (
+                    <div 
+                      key={event.id} 
+                      className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
+                      onClick={() => setEventId(event.id)}
+                    >
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start',
+                        gap: '8px'
+                      }}>
+                        <h3>{event.summary}</h3>
+                        <span className="calendar-tag">
+                          {event.calendarTitle}
+                        </span>
+                      </div>
+                      <p className="event-time">
+                        🕒 {new Date(event.start.dateTime || event.start.date).toLocaleString()}
+                      </p>
+                      <p className="event-time">
+                        ⏰ {new Date(event.end.dateTime || event.end.date).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                    {isLoading ? '일정을 불러오는 중...' : '최근 일정이 없습니다.'}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
