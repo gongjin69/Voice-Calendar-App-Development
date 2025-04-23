@@ -17,8 +17,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 
-// 미들웨어 설정
-app.use(cors());
+// CORS 설정 - 모든 출처 허용
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'user-email']
+}));
+
 app.use(express.json());
 // 정적 파일 제공
 app.use(express.static(distPath));
@@ -35,9 +40,30 @@ const checkAdmin = (req, res, next) => {
   next();
 };
 
-// 헬스 체크
+// 헬스 체크 - 강화된 버전
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy' });
+  // CORS 헤더 직접 설정
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
+  try {
+    // 데이터베이스 연결 테스트 (옵션)
+    // await prisma.$queryRaw`SELECT 1`;
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      version: '1.0.0'
+    });
+  } catch (error) {
+    console.error('Health check error:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
 });
 
 // 관리자 및 이메일 API 라우트

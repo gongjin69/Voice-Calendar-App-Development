@@ -25,10 +25,12 @@ function App() {
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [userEmail, setUserEmail] = useState('');
-  const [isServerConnected, setIsServerConnected] = useState(false);
+  const [isServerConnected, setIsServerConnected] = useState(true);
   const [isApproved, setIsApproved] = useState(false);
   const [accessRequestSent, setAccessRequestSent] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [isTestUser, setIsTestUser] = useState(false);
+  const [loginAttempted, setLoginAttempted] = useState(false);
 
   useEffect(() => {
     const loadGoogleAPI = async () => {
@@ -78,8 +80,19 @@ function App() {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/health`);
-        setIsServerConnected(response.data.status === 'healthy');
+        // 배포된 URL로 직접 요청
+        const response = await axios.get('https://ewc-voice-calendar-app.vercel.app/api/health', {
+          timeout: 5000, // 5초 타임아웃 설정
+          validateStatus: (status) => status === 200 // 200 상태 코드만 성공으로 처리
+        });
+        
+        console.log('서버 연결 응답:', response.data);
+        // 응답이 올바른지 확인
+        if (response.data && response.data.status === 'healthy') {
+          setIsServerConnected(true);
+        } else {
+          setIsServerConnected(false);
+        }
       } catch (error) {
         console.error('서버 연결 확인 실패:', error);
         setIsServerConnected(false);
@@ -87,7 +100,8 @@ function App() {
     };
 
     checkServer();
-    const interval = setInterval(checkServer, 5000);
+    // 30초마다 서버 연결 확인 (더 긴 간격으로 변경)
+    const interval = setInterval(checkServer, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -403,8 +417,14 @@ function App() {
       }}>
         <h2>서버에 연결할 수 없습니다</h2>
         <p>서버가 실행 중인지 확인해주세요.</p>
+        <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
+          서버 연결 URL: https://ewc-voice-calendar-app.vercel.app/api/health
+        </p>
         <button 
-          onClick={() => window.location.reload()} 
+          onClick={() => {
+            // 캐시를 무시하고 페이지 새로고침
+            window.location.reload(true);
+          }} 
           style={{
             padding: '10px 20px',
             marginTop: '20px',
