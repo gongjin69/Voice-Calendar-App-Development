@@ -32,86 +32,42 @@ function App() {
   const [isTestUser, setIsTestUser] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
 
+  // Google API 이벤트 리스너 등록
   useEffect(() => {
-    const loadGoogleAPI = async () => {
-      try {
-        console.log('Google API 로드 시작...');
-        
-        // 이미 로드된 경우 다시 로드하지 않음
-        if (window.gapi) {
-          console.log('GAPI가 이미 로드되어 있습니다.');
-          setGapiInited(true);
-          return;
-        }
-        
-        // Load the Google API client library
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://apis.google.com/js/api.js';
-          script.async = true;
-          script.defer = true;
-          script.onload = () => {
-            console.log('GAPI 스크립트 로드 완료');
-            resolve();
-          };
-          script.onerror = (error) => {
-            console.error('GAPI 스크립트 로드 실패:', error);
-            reject(error);
-          };
-          document.body.appendChild(script);
-        });
+    console.log('Google API 이벤트 리스너 설정 중...');
+    
+    // 이미 초기화된 경우 확인
+    if (window.gapiReady) {
+      console.log('GAPI가 이미 초기화되어 있습니다.');
+      setGapiInited(true);
+    }
+    
+    if (window.gisReady) {
+      console.log('GIS가 이미 초기화되어 있습니다.');
+      setGisInited(true);
+    }
 
-        // Load the Google Identity Services library
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://accounts.google.com/gsi/client';
-          script.async = true;
-          script.defer = true;
-          script.onload = () => {
-            console.log('GIS 스크립트 로드 완료');
-            resolve();
-          };
-          script.onerror = (error) => {
-            console.error('GIS 스크립트 로드 실패:', error);
-            reject(error);
-          };
-          document.body.appendChild(script);
-        });
-
-        // GAPI 초기화를 위해 잠시 대기
-        console.log('GAPI 초기화 중...');
-        setTimeout(async () => {
-          try {
-            if (!window.gapi) {
-              console.error('GAPI 객체가 없습니다.');
-              return;
-            }
-            
-            await window.gapi.load('client', async () => {
-              try {
-                console.log('GAPI 클라이언트 초기화 중...');
-                await window.gapi.client.init({
-                  apiKey: API_KEY,
-                  discoveryDocs: [DISCOVERY_DOC],
-                });
-                console.log('GAPI 초기화 완료!');
-                setGapiInited(true);
-              } catch (err) {
-                console.error('GAPI 초기화 오류:', err);
-              }
-            });
-          } catch (err) {
-            console.error('GAPI 로드 오류:', err);
-          }
-        }, 1000);
-
-        setGisInited(true);
-      } catch (error) {
-        console.error('Google API 로드 오류:', error);
-      }
+    // GAPI 로드 이벤트 리스너
+    const handleGapiLoaded = () => {
+      console.log('GAPI 로드 이벤트 감지');
+      setGapiInited(true);
     };
-
-    loadGoogleAPI();
+    
+    // GIS 로드 이벤트 리스너
+    const handleGisLoaded = () => {
+      console.log('GIS 로드 이벤트 감지');
+      setGisInited(true);
+    };
+    
+    // 이벤트 리스너 등록
+    document.addEventListener('gapi-loaded', handleGapiLoaded);
+    document.addEventListener('gis-loaded', handleGisLoaded);
+    
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      document.removeEventListener('gapi-loaded', handleGapiLoaded);
+      document.removeEventListener('gis-loaded', handleGisLoaded);
+    };
   }, []);
 
   // Check server connection
@@ -152,15 +108,18 @@ function App() {
   const handleLogin = async () => {
     if (!gapiInited || !gisInited) {
       console.error('Google API가 아직 초기화되지 않았습니다.');
+      alert('잠시 후 다시 시도해주세요. Google API를 초기화하는 중입니다.');
       return;
     }
 
     try {
+      console.log('로그인 시도 중...');
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
+        client_id: window.googleConfig.clientId,
         scope: SCOPES,
         callback: async (response) => {
           if (response.error !== undefined) {
+            console.error('OAuth 오류:', response);
             throw response;
           }
           setIsSignedIn(true);
@@ -172,6 +131,7 @@ function App() {
       tokenClient.requestAccessToken({ prompt: 'consent' });
     } catch (error) {
       console.error('로그인 오류:', error);
+      alert('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
     }
   };
 
