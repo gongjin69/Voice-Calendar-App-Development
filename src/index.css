@@ -1,241 +1,129 @@
+/* Import Pretendard font */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+
 :root {
-  --primary-color: #4285f4;
-  --secondary-color: #34a853;
-  --danger-color: #ea4335;
-  --warning-color: #fbbc05;
-  --background-color: #ffffff;
-  --light-background: #f8f9fa;
-  --text-color: #202124;
-  --border-radius: 12px;
-  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: #2C3E50;
+  background-color: #f8f9fa;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+a {
+  font-weight: 500;
+  color: #3498db;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #2980b9;
 }
 
 body {
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  display: flex;
+  min-width: 320px;
   min-height: 100vh;
-}
-
-#root {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 16px;
+  background-color: #f8f9fa;
 }
 
 h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1.5rem;
-  text-align: center;
-  color: white;
+  font-size: 2.5em;
+  line-height: 1.2;
+  font-weight: 600;
+  color: #2C3E50;
+  margin-bottom: 1rem;
 }
 
 button {
-  padding: 12px 20px;
-  border: none;
-  border-radius: var(--border-radius);
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #3498db;
+  color: white;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+button:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+/* Add container styles */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
   width: 100%;
-  margin: 8px 0;
 }
 
-button:active {
-  transform: scale(0.98);
+/* Add card styles */
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
 }
 
-.login-button {
-  background-color: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 48px;
+/* Form styles */
+input, textarea, select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  font-family: inherit;
   font-size: 1rem;
-  border-radius: 24px;
-  padding: 0 24px;
+  transition: border-color 0.2s ease;
+  margin-bottom: 1rem;
 }
 
-.voice-control-section {
-  background: white;
-  padding: 24px;
-  border-radius: var(--border-radius);
-  box-shadow: var(--box-shadow);
-  margin: 16px 0;
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
-.voice-buttons {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.voice-buttons button {
-  height: 48px;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.transcript-box {
-  background: var(--light-background);
-  padding: 20px;
-  border-radius: var(--border-radius);
-  margin: 16px 0;
-  min-height: 100px;
-}
-
-.event-controls {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.event-list {
-  background: white;
-  padding: 24px;
-  border-radius: var(--border-radius);
-  box-shadow: var(--box-shadow);
-  margin: 16px 0;
-}
-
-.event-item {
-  background: white;
-  padding: 20px;
-  border-radius: var(--border-radius);
-  margin: 12px 0;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.event-item:active {
-  transform: scale(0.98);
-}
-
-.event-item h3 {
-  font-size: 1.1rem;
-  margin-bottom: 12px;
-  color: #333;
-}
-
-.event-time {
-  font-size: 0.9rem;
-  color: #666;
-  margin: 6px 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.calendar-tag {
-  display: inline-flex;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  background: var(--light-background);
-  color: #666;
-}
-
-.selected-event {
-  background: #e8f0fe;
-  border-color: var(--primary-color);
-}
-
-.error-message {
-  background: #fee8e6;
-  color: var(--danger-color);
-  padding: 20px;
-  border-radius: var(--border-radius);
-  margin: 16px 0;
-  text-align: center;
-}
-
-.refresh-button {
-  background: var(--primary-color);
-  color: white;
-  height: 40px;
-  padding: 0 20px;
-  font-size: 0.9rem;
-}
-
-.start-button {
-  background: var(--secondary-color);
-  color: white;
-}
-
-.stop-button {
-  background: var(--danger-color);
-  color: white;
-}
-
-.reset-button {
-  background: var(--warning-color);
-  color: white;
-}
-
-@media (min-width: 768px) {
-  #root {
-    max-width: 768px;
-    padding: 24px;
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #ecf0f1;
+    background-color: #1a1a1a;
   }
 
-  .voice-buttons, .event-controls {
-    grid-template-columns: repeat(3, 1fr);
+  .card {
+    background: #2c2c2c;
   }
 
-  h1 {
-    font-size: 2rem;
+  input, textarea, select {
+    background-color: #2c2c2c;
+    border-color: #444;
+    color: #ecf0f1;
   }
-}
 
-/* 모바일에서의 스크롤 개선 */
-.events-container {
-  max-height: 60vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  padding: 4px;
-}
+  button {
+    background-color: #3498db;
+  }
 
-.events-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.events-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.events-container::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 3px;
-}
-
-/* 터치 피드백 */
-@media (hover: hover) {
   button:hover {
-    opacity: 0.9;
-  }
-
-  .event-item:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--box-shadow);
+    background-color: #2980b9;
   }
 }

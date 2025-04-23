@@ -18,9 +18,9 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
-// Google App Engine은 환경 변수 PORT를 자동으로 설정합니다
+// 서버 포트 설정
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-});
+}); 

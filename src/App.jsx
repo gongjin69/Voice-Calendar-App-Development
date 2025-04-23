@@ -3,42 +3,18 @@ import React, { useEffect, useState } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import axios from 'axios';
 import md5 from 'md5';
+import './App.css';
+import AdminDashboard from './components/AdminDashboard';
 
-// Polyfill for speech recognition
-const SpeechRecognitionPolyfill = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRecognitionPolyfill) {
-  console.error('Speech recognition is not supported in this browser');
-}
-
-const CLIENT_ID = '1013074395482-u7uq1tavr0fodg0an454k609qmot57ac.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyAmt5-72N9yZCMp_zpmGdX8T-I90knNvKw';
+// Google Calendar API 설정
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
-// 관리자 이메일 상수 정의
-const ADMIN_EMAIL = 'cspark69@ewckids.com';
-// 테스트 사용자 이메일 목록
-const TEST_USERS = [
-  'cspark69@ewckids.com',
-  'mo@ewckids.com',  // 테스트 사용자 추가
-  // 여기에 다른 테스트 사용자 이메일을 추가할 수 있습니다
-];
-
-// API 기본 URL 설정
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://voice-calendar-app.uc.r.appspot.com'  // Google App Engine URL
-  : 'http://localhost:3001';
-
-// 서버 상태 확인을 위한 함수
-const checkServerConnection = async () => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/health`);
-    setIsServerConnected(response.data.status === 'healthy');
-  } catch (error) {
-    console.error('Server connection check failed:', error);
-    setIsServerConnected(false);
-  }
-};
+// 관리자 이메일 목록
+const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
+const MASTER_ADMIN_EMAIL = 'cspark69@ewckids.com';
 
 function App() {
   const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
@@ -48,16 +24,11 @@ function App() {
   const [eventId, setEventId] = useState(null);
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasAccess, setHasAccess] = useState(false);
-  const [isRequestingAccess, setIsRequestingAccess] = useState(false);
   const [userEmail, setUserEmail] = useState('');
-  const [userName, setUserName] = useState('');
   const [isServerConnected, setIsServerConnected] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [notificationEnabled, setNotificationEnabled] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isTestUser, setIsTestUser] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
+  const [accessRequestSent, setAccessRequestSent] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
   useEffect(() => {
     const loadGoogleAPI = async () => {
@@ -107,9 +78,8 @@ function App() {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/health`);
-        setIsServerConnected(response.data.status === 'ok');
-        console.log('서버 연결 상태:', response.data);
+        const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/health`);
+        setIsServerConnected(response.data.status === 'healthy');
       } catch (error) {
         console.error('서버 연결 확인 실패:', error);
         setIsServerConnected(false);
@@ -121,39 +91,12 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Google 사용자 정보 조회 및 관리자/테스트 사용자 확인 함수
-  const checkUserAccess = async (userEmail) => {
-    try {
-      console.log('Checking access for:', userEmail);
-      // 관리자 이메일인 경우
-      if (userEmail === ADMIN_EMAIL) {
-        console.log('Admin access granted');
-        setIsAdmin(true);
-        setHasAccess(true);
-        return true;
-      }
-
-      // 테스트 사용자인 경우
-      if (TEST_USERS.includes(userEmail)) {
-        console.log('Test user access granted');
-        setIsTestUser(true);
-        setHasAccess(true);
-        return true;
-      }
-
-      // 일반 사용자의 경우 서버에 접근 권한 확인
-      const accessResponse = await axios.get(`${API_BASE_URL}/api/check-access/${userEmail}`);
-      console.log('Server access response:', accessResponse.data);
-      setHasAccess(accessResponse.data.hasAccess);
-      return accessResponse.data.hasAccess;
-    } catch (error) {
-      console.error('사용자 접근 권한 확인 실패:', error);
-      setHasAccess(false);
-      return false;
+  useEffect(() => {
+    if (userEmail) {
+      checkApprovalStatus();
     }
-  };
+  }, [userEmail]);
 
-  // 로그인 핸들러 수정
   const handleLogin = async () => {
     if (!gapiInited || !gisInited) {
       console.error('Google API가 아직 초기화되지 않았습니다.');
@@ -164,36 +107,28 @@ function App() {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        ux_mode: 'popup',
         callback: async (response) => {
           if (response.error !== undefined) {
-            console.error('OAuth 오류:', response);
-            return;
+            throw response;
           }
-          
-          try {
-            // Get user info
-            const userInfoResponse = await window.gapi.client.oauth2.userinfo.get();
-            const userEmail = userInfoResponse.result.email;
-            setUserEmail(userEmail);
-            
-            // 사용자 접근 권한 확인
-            const hasAccess = await checkUserAccess(userEmail);
-            if (hasAccess) {
-              setIsSignedIn(true);
-              console.log('Login completed for:', userEmail);
-            }
-          } catch (error) {
-            console.error('사용자 정보 조회 실패:', error);
-          }
+          setIsSignedIn(true);
+          await fetchUserInfo();
+          await fetchRecentEvents();
         },
       });
 
-      tokenClient.requestAccessToken({
-        prompt: 'consent'
-      });
+      tokenClient.requestAccessToken({ prompt: 'consent' });
     } catch (error) {
       console.error('로그인 오류:', error);
+    }
+  };
+
+  const fetchUserInfo = async () => {
+    try {
+      const response = await window.gapi.client.oauth2.userinfo.get();
+      setUserEmail(response.result.email);
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
     }
   };
 
@@ -206,11 +141,7 @@ function App() {
         setIsSignedIn(false);
         setEventId(null);
         setEvents([]);
-        setIsAdmin(false);
-        setIsTestUser(false);
-        setHasAccess(false);
         setUserEmail('');
-        setUserName('');
       }
     } catch (error) {
       console.error('로그아웃 오류:', error);
@@ -223,19 +154,14 @@ function App() {
     setIsLoading(true);
     try {
       const now = new Date();
-      // 현재 날짜의 시작 시점으로 설정
       now.setHours(0, 0, 0, 0);
       
-      // 향후 10일 후의 날짜 설정
       const tenDaysLater = new Date(now);
       tenDaysLater.setDate(now.getDate() + 10);
       tenDaysLater.setHours(23, 59, 59, 999);
 
-      // 먼저 캘린더 목록을 가져옵니다
       const calendarList = await gapi.client.calendar.calendarList.list();
       const calendars = calendarList.result.items || [];
-      
-      // 모든 캘린더에서 일정을 가져옵니다
       const allEvents = [];
       
       for (const calendar of calendars) {
@@ -249,7 +175,6 @@ function App() {
             singleEvents: true,
           });
           
-          // 각 일정에 캘린더 정보를 추가합니다
           const eventsWithCalendar = (response.result.items || []).map(event => ({
             ...event,
             calendarTitle: calendar.summary,
@@ -262,7 +187,6 @@ function App() {
         }
       }
 
-      // 날짜순으로 정렬
       allEvents.sort((a, b) => {
         const aTime = new Date(a.start.dateTime || a.start.date);
         const bTime = new Date(b.start.dateTime || b.start.date);
@@ -278,27 +202,10 @@ function App() {
     }
   };
 
-  const handleCreateEvent = async (eventData) => {
-    try {
-      const response = await gapi.client.calendar.events.insert({
-        calendarId: 'primary',
-        resource: eventData,
-      });
-
-      setEventId(response.result.id);
-      await fetchRecentEvents();
-      return response.result;
-    } catch (error) {
-      console.error('일정 생성 오류:', error);
-      throw error;
-    }
-  };
-
   const createEvent = async () => {
     if (!isSignedIn) return;
 
     try {
-      // 음성 입력에서 날짜와 시간 정보 추출
       const dateTimeRegex = /(\d+)월\s*(\d+)일\s*(오전|오후)?\s*(\d+)시/;
       const match = transcript.match(dateTimeRegex);
       
@@ -320,7 +227,6 @@ function App() {
         eventDateTime.setHours(adjustedHour, 0, 0, 0);
       }
 
-      // 종료 시간은 시작 시간으로부터 1시간 후로 설정
       const endDateTime = new Date(eventDateTime.getTime() + 3600000);
 
       const event = {
@@ -333,19 +239,23 @@ function App() {
           dateTime: endDateTime.toISOString(),
           timeZone: 'Asia/Seoul',
         },
-        // 기본 알림 설정 추가
         reminders: {
           useDefault: false,
           overrides: [
-            { method: 'email', minutes: 24 * 60 }, // 24시간 전 이메일
-            { method: 'popup', minutes: 60 }, // 1시간 전 팝업
+            { method: 'email', minutes: 24 * 60 },
+            { method: 'popup', minutes: 60 },
           ],
         },
       };
 
-      const response = await handleCreateEvent(event);
-      setEventId(response.id);
+      const response = await gapi.client.calendar.events.insert({
+        calendarId: 'primary',
+        resource: event,
+      });
+
+      setEventId(response.result.id);
       alert('✅ 일정이 등록되었습니다!\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 1시간 전 팝업 알림');
+      await fetchRecentEvents();
     } catch (error) {
       console.error('일정 등록 오류:', error);
       alert('일정 등록에 실패했습니다.');
@@ -364,7 +274,6 @@ function App() {
         eventId,
         resource: {
           summary: transcript || '수정된 일정',
-          description: '수정됨',
         },
       });
       alert('✏️ 일정이 수정되었습니다.');
@@ -394,6 +303,84 @@ function App() {
       alert('일정 삭제에 실패했습니다.');
     }
   };
+
+  const checkApprovalStatus = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/users/approval-status/${userEmail}`);
+      setIsApproved(response.data.isApproved);
+      setAccessRequestSent(response.data.requestExists);
+    } catch (error) {
+      console.error('승인 상태 확인 실패:', error);
+    }
+  };
+
+  const requestAccess = async () => {
+    try {
+      // 접근 요청 생성
+      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/access-requests`, {
+        email: userEmail,
+        name: userEmail.split('@')[0],
+      });
+
+      // 마스터 관리자에게 이메일 발송
+      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/send-email`, {
+        to: MASTER_ADMIN_EMAIL,
+        subject: '새로운 사용자 접근 요청',
+        text: `
+          새로운 사용자가 Voice Calendar 접근을 요청했습니다.
+          
+          이메일: ${userEmail}
+          이름: ${userEmail.split('@')[0]}
+          요청 시간: ${new Date().toLocaleString()}
+          
+          관리자 대시보드에서 승인하시거나 이 이메일에 회신하여 승인하실 수 있습니다.
+        `
+      });
+
+      setAccessRequestSent(true);
+      alert('접근 요청이 전송되었습니다. 관리자의 승인을 기다려주세요.');
+    } catch (error) {
+      console.error('접근 요청 실패:', error);
+      alert('접근 요청 중 오류가 발생했습니다. 나중에 다시 시도해주세요.');
+    }
+  };
+
+  // 관리자 여부 확인
+  const isAdmin = userEmail && ADMIN_EMAILS.includes(userEmail);
+
+  // 접근 권한이 없는 경우 표시할 컴포넌트
+  const renderAccessDenied = () => (
+    <div style={{ 
+      padding: '2rem', 
+      textAlign: 'center',
+      maxWidth: '600px',
+      margin: '0 auto'
+    }}>
+      <h2 style={{ marginBottom: '1rem', color: '#2C3E50' }}>접근 권한이 필요합니다</h2>
+      <p style={{ marginBottom: '2rem', color: '#666' }}>
+        이 서비스를 이용하기 위해서는 관리자의 승인이 필요합니다.
+      </p>
+      {!accessRequestSent ? (
+        <button 
+          onClick={requestAccess}
+          style={{
+            backgroundColor: 'var(--primary-color)',
+            color: 'white',
+            padding: '0.8rem 1.5rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          접근 권한 요청하기
+        </button>
+      ) : (
+        <p style={{ color: 'var(--secondary-color)' }}>
+          ✓ 접근 요청이 전송되었습니다. 관리자의 승인을 기다려주세요.
+        </p>
+      )}
+    </div>
+  );
 
   if (!browserSupportsSpeechRecognition) {
     return (
@@ -475,9 +462,10 @@ function App() {
               fontWeight: 'bold',
               margin: 0,
               color: '#333'
-            }}>VOICE 구글캘린더</h1>
+            }}>음성 일정 관리</h1>
           </div>
         </div>
+
         {!gapiInited || !gisInited ? (
           <button disabled className="login-button">
             초기화 중...
@@ -487,7 +475,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <img 
                 src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
-                alt="User Avatar"
+                alt="사용자 아바타"
                 style={{ 
                   width: '40px', 
                   height: '40px', 
@@ -495,171 +483,177 @@ function App() {
                   border: '2px solid white'
                 }}
               />
-              <span style={{ color: 'white' }}>{userEmail}</span>
+              <span style={{ color: '#333' }}>{userEmail}</span>
             </div>
-            <button 
-              onClick={handleLogout} 
-              className="login-button"
-              style={{ width: 'auto', padding: '8px 16px' }}
-            >
-              🔓 로그아웃
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {isAdmin && (
+                <button 
+                  onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                  className="admin-button"
+                  style={{ 
+                    backgroundColor: showAdminDashboard ? 'var(--warning-color)' : 'var(--secondary-color)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showAdminDashboard ? '일반 모드로 전환' : '관리자 모드로 전환'}
+                </button>
+              )}
+              <button 
+                onClick={handleLogout} 
+                className="login-button"
+                style={{ width: 'auto', padding: '8px 16px' }}
+              >
+                🔓 로그아웃
+              </button>
+            </div>
           </div>
         ) : (
           <button onClick={handleLogin} className="login-button">
             <img 
               src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
-              alt="Google Logo" 
-              style={{ width: '20px', height: '20px' }}
+              alt="구글 로고" 
+              style={{ width: '20px', height: '20px', marginRight: '10px' }}
             />
-            Google 로그인
+            구글 로그인
           </button>
         )}
 
-        {isSignedIn && !hasAccess && !isAdmin && !isTestUser && (
-          <div style={{ textAlign: 'center', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '10px' }}>
-            <h2>액세스 요청</h2>
-            <p>이 애플리케이션을 사용하기 위해서는 관리자의 승인이 필요합니다.</p>
-            <button
-              onClick={handleLogin}
-              disabled={isRequestingAccess}
-              style={{
-                backgroundColor: '#4285f4',
-                color: 'white',
-                padding: '10px 20px',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: isRequestingAccess ? 'not-allowed' : 'pointer',
-                opacity: isRequestingAccess ? 0.7 : 1
-              }}
-            >
-              {isRequestingAccess ? '요청 처리 중...' : '액세스 요청하기'}
-            </button>
-          </div>
-        )}
-
         {isSignedIn && (
-          <div style={{ padding: '0 20px' }}>
-            <div className="voice-control-section">
-              <h2 style={{ marginBottom: '20px', color: '#333' }}>음성 인식</h2>
-              <p style={{ 
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: listening ? 'var(--secondary-color)' : '#666'
-              }}>
-                🎧 듣는 중: {listening ? '✅' : '❌'}
-              </p>
-              <div className="voice-buttons">
-                <button 
-                  onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' })}
-                  className="start-button"
-                >
-                  🎙️ 말하기
-                </button>
-                <button 
-                  onClick={SpeechRecognition.stopListening}
-                  className="stop-button"
-                >
-                  🛑 멈추기
-                </button>
-                <button 
-                  onClick={resetTranscript}
-                  className="reset-button"
-                >
-                  🔄 초기화
-                </button>
-              </div>
-
-              <div className="transcript-box">
-                <h3 style={{ marginBottom: '10px', color: '#333' }}>📝 인식된 텍스트</h3>
-                <p style={{ color: '#666' }}>{transcript}</p>
-              </div>
-
-              <div className="event-controls">
-                <button 
-                  onClick={createEvent}
-                  style={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}
-                >
-                  📅 일정 등록
-                </button>
-                <button 
-                  onClick={updateEvent}
-                  style={{ backgroundColor: 'var(--warning-color)', color: 'white' }}
-                >
-                  ✏️ 일정 수정
-                </button>
-                <button 
-                  onClick={deleteEvent}
-                  style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}
-                >
-                  🗑️ 일정 삭제
-                </button>
-              </div>
-            </div>
-
-            <div className="event-list">
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '20px'
-              }}>
-                <h2 style={{ color: '#333' }}>📅 최근 일정</h2>
-                <button 
-                  onClick={fetchRecentEvents}
-                  className="refresh-button"
-                  style={{ 
-                    width: 'auto', 
-                    padding: '8px 16px',
-                    marginTop: 0 
-                  }}
-                  disabled={isLoading}
-                >
-                  {isLoading ? '로딩 중...' : '🔄 새로고침'}
-                </button>
-              </div>
-              
-              <div className="events-container">
-                {events.length > 0 ? (
-                  events.map((event) => (
-                    <div 
-                      key={event.id} 
-                      className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
-                      onClick={() => setEventId(event.id)}
-                    >
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'flex-start',
-                        gap: '8px'
-                      }}>
-                        <h3>{event.summary}</h3>
-                        <span className="calendar-tag">
-                          {event.calendarTitle}
-                        </span>
-                      </div>
-                      <p className="event-time">
-                        🕒 {new Date(event.start.dateTime || event.start.date).toLocaleString()}
-                      </p>
-                      <p className="event-time">
-                        ⏰ {new Date(event.end.dateTime || event.end.date).toLocaleString()}
-                      </p>
+          <>
+            {isAdmin && showAdminDashboard ? (
+              <AdminDashboard userEmail={userEmail} />
+            ) : (
+              isApproved ? (
+                <div style={{ padding: '0 20px' }}>
+                  <div className="voice-control-section">
+                    <h2 style={{ marginBottom: '20px', color: '#333' }}>음성 인식</h2>
+                    <p style={{ 
+                      marginBottom: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: listening ? 'var(--secondary-color)' : '#666'
+                    }}>
+                      🎧 음성 인식 상태: {listening ? '켜짐' : '꺼짐'}
+                    </p>
+                    <div className="voice-buttons">
+                      <button 
+                        onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' })}
+                        className="start-button"
+                      >
+                        🎙️ 음성 인식 시작
+                      </button>
+                      <button 
+                        onClick={SpeechRecognition.stopListening}
+                        className="stop-button"
+                      >
+                        🛑 음성 인식 중지
+                      </button>
+                      <button 
+                        onClick={resetTranscript}
+                        className="reset-button"
+                      >
+                        🔄 텍스트 초기화
+                      </button>
                     </div>
-                  ))
-                ) : (
-                  <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-                    {isLoading ? '일정을 불러오는 중...' : '최근 일정이 없습니다.'}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+
+                    <div className="transcript-box">
+                      <h3 style={{ marginBottom: '10px', color: '#333' }}>📝 인식된 내용</h3>
+                      <p style={{ color: '#666' }}>{transcript}</p>
+                    </div>
+
+                    <div className="event-controls">
+                      <button 
+                        onClick={createEvent}
+                        style={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}
+                      >
+                        📅 일정 추가하기
+                      </button>
+                      <button 
+                        onClick={updateEvent}
+                        style={{ backgroundColor: 'var(--warning-color)', color: 'white' }}
+                      >
+                        ✏️ 일정 수정하기
+                      </button>
+                      <button 
+                        onClick={deleteEvent}
+                        style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}
+                      >
+                        🗑️ 일정 삭제하기
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="event-list">
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      marginBottom: '20px'
+                    }}>
+                      <h2 style={{ color: '#333' }}>📅 내 일정 목록</h2>
+                      <button 
+                        onClick={fetchRecentEvents}
+                        className="refresh-button"
+                        style={{ 
+                          width: 'auto', 
+                          padding: '8px 16px',
+                          marginTop: 0 
+                        }}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? '불러오는 중...' : '🔄 새로고침'}
+                      </button>
+                    </div>
+                    
+                    <div className="events-container">
+                      {events.length > 0 ? (
+                        events.map((event) => (
+                          <div 
+                            key={event.id} 
+                            className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
+                            onClick={() => setEventId(event.id)}
+                          >
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'flex-start',
+                              gap: '8px'
+                            }}>
+                              <h3>{event.summary}</h3>
+                              <span className="calendar-tag" style={{ backgroundColor: event.calendarColor }}>
+                                {event.calendarTitle}
+                              </span>
+                            </div>
+                            <p className="event-time">
+                              🕒 시작: {new Date(event.start.dateTime || event.start.date).toLocaleString()}
+                            </p>
+                            <p className="event-time">
+                              ⏰ 종료: {new Date(event.end.dateTime || event.end.date).toLocaleString()}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                          {isLoading ? '일정을 불러오는 중...' : '등록된 일정이 없습니다.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                renderAccessDenied()
+              )
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
 
-export default App; 
+export default App;
