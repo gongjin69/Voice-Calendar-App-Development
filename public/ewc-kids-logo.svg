@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40" fill="none">
+  <path d="M2 2H20V8H2V2Z" fill="#4285F4"/>
+  <path d="M2 16H20V22H2V16Z" fill="#4285F4"/>
+  <path d="M2 30H20V36H2V30Z" fill="#4285F4"/>
+  <path d="M28 2H40V8H28V2Z" fill="#4285F4"/>
+  <path d="M28 16H36V36H28V16Z" fill="#4285F4"/>
+  <path d="M44 2H52V36H44V2Z" fill="#4285F4"/>
+  <path d="M60 2H68V20H60V2Z" fill="#4285F4"/>
+  <path d="M76 2H92V8H76V2Z" fill="#4285F4"/>
+  <path d="M76 16H88V22H76V16Z" fill="#4285F4"/>
+  <path d="M76 30H92V36H76V30Z" fill="#4285F4"/>
+  <path d="M100 2H118V8H106V14H118V20H106V30H118V36H100V2Z" fill="#4285F4"/>
+  <text x="58" y="36" fill="#4285F4" font-family="Arial, sans-serif" font-size="12" font-weight="bold">KIDS</text>
+</svg> 

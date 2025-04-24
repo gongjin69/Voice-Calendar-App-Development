@@ -365,50 +365,78 @@ function App() {
     
     setIsLoading(true);
     try {
+      // 일정 조회 시작 시간을 30일 전으로 설정 (과거 일정도 표시)
       const now = new Date();
-      now.setHours(0, 0, 0, 0);
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(now.getMonth() - 1);
+      oneMonthAgo.setHours(0, 0, 0, 0);
       
-      const tenDaysLater = new Date(now);
-      tenDaysLater.setDate(now.getDate() + 10);
-      tenDaysLater.setHours(23, 59, 59, 999);
+      // 일정 조회 종료 시간을 30일 후로 설정
+      const oneMonthLater = new Date(now);
+      oneMonthLater.setMonth(now.getMonth() + 1);
+      oneMonthLater.setHours(23, 59, 59, 999);
 
+      // 구글 API 클라이언트 상태 확인
+      if (!window.gapi.client || !window.gapi.client.calendar) {
+        console.error('구글 API 클라이언트가 초기화되지 않았습니다.');
+        setApiError('구글 API가 초기화되지 않았습니다. 페이지를 새로고침해 주세요.');
+        return;
+      }
+
+      console.log('캘린더 목록 조회 시작');
       const calendarList = await window.gapi.client.calendar.calendarList.list();
+      console.log('캘린더 목록 조회 결과:', calendarList.result);
+      
       const calendars = calendarList.result.items || [];
       const allEvents = [];
       
+      // 각 캘린더별로 일정 조회
       for (const calendar of calendars) {
         try {
+          console.log(`'${calendar.summary}' 캘린더 일정 조회 시작`);
+          
           const response = await window.gapi.client.calendar.events.list({
             calendarId: calendar.id,
-            timeMin: now.toISOString(),
-            timeMax: tenDaysLater.toISOString(),
-            maxResults: 100,
+            timeMin: oneMonthAgo.toISOString(),
+            timeMax: oneMonthLater.toISOString(),
+            maxResults: 250, // 더 많은 일정을 가져오도록 증가
             orderBy: 'startTime',
             singleEvents: true,
+            showDeleted: false
           });
           
+          console.log(`'${calendar.summary}' 캘린더 일정 조회 결과:`, response.result);
+          
+          // 응답에서 일정 목록 추출하고 캘린더 정보 추가
           const eventsWithCalendar = (response.result.items || []).map(event => ({
             ...event,
             calendarTitle: calendar.summary,
-            calendarColor: calendar.backgroundColor
+            calendarColor: calendar.backgroundColor || '#4285f4'
           }));
           
           allEvents.push(...eventsWithCalendar);
         } catch (error) {
-          console.error(`캘린더 일정 조회 실패:`, error.message);
+          console.error(`'${calendar.summary}' 캘린더 일정 조회 실패:`, error.message || error);
         }
       }
 
+      // 시작 시간 기준으로 정렬
       allEvents.sort((a, b) => {
         const aTime = new Date(a.start.dateTime || a.start.date);
         const bTime = new Date(b.start.dateTime || b.start.date);
         return aTime - bTime;
       });
 
+      console.log('전체 일정 조회 완료, 건수:', allEvents.length);
       setEvents(allEvents);
+      
+      // 일정이 없는 경우 사용자에게 알림
+      if (allEvents.length === 0) {
+        console.log('조회된 일정이 없습니다.');
+      }
     } catch (error) {
-      console.error('일정 조회 오류:', error.message);
-      setApiError('일정을 불러오는 중 오류가 발생했습니다.');
+      console.error('일정 조회 오류:', error.message || error);
+      setApiError('일정을 불러오는 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
     } finally {
       setIsLoading(false);
     }
@@ -418,6 +446,7 @@ function App() {
     if (!isSignedIn) return;
 
     try {
+      setIsLoading(true);
       const dateTimeRegex = /(\d+)월\s*(\d+)일\s*(오전|오후)?\s*(\d+)시/;
       const match = transcript.match(dateTimeRegex);
       
@@ -455,22 +484,57 @@ function App() {
           useDefault: false,
           overrides: [
             { method: 'email', minutes: 24 * 60 },
-            { method: 'popup', minutes: 60 },
+            { method: 'popup', minutes: 30 },
           ],
         },
       };
 
+      console.log('일정 생성 시도:', event);
+      
+      // 구글 API 클라이언트 상태 확인
+      if (!window.gapi.client || !window.gapi.client.calendar) {
+        console.error('구글 API 클라이언트가 초기화되지 않았습니다.');
+        alert('구글 API 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 후 다시 시도해주세요.');
+        return;
+      }
+
       const response = await window.gapi.client.calendar.events.insert({
-        calendarId: 'primary',
+        calendarId: 'primary', // 기본 캘린더에 일정 추가
         resource: event,
       });
 
-      setEventId(response.result.id);
-      alert('✅ 일정이 등록되었습니다!\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 1시간 전 팝업 알림');
-      await fetchRecentEvents();
+      if (response && response.result && response.result.id) {
+        console.log('일정 생성 성공:', response.result);
+        setEventId(response.result.id);
+        alert(`✅ 일정이 등록되었습니다! (ID: ${response.result.id.substr(0, 8)}...)\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
+        
+        // 새로 생성된 일정을 즉시 목록에 추가
+        setEvents(prevEvents => {
+          const newEvent = {
+            ...response.result,
+            calendarTitle: '내 캘린더',
+            calendarColor: '#4285f4'
+          };
+          return [newEvent, ...prevEvents];
+        });
+        
+        // 전체 일정 목록 새로고침
+        await fetchRecentEvents();
+      } else {
+        console.error('일정 생성 응답에 ID가 없습니다:', response);
+        alert('일정이 생성되었으나 응답에 문제가 있습니다. 캘린더를 새로고침해 주세요.');
+      }
     } catch (error) {
       console.error('일정 등록 오류:', error);
-      alert('일정 등록에 실패했습니다.');
+      
+      // 상세 오류 정보 로깅
+      if (error.result && error.result.error) {
+        console.error('API 오류 상세:', error.result.error);
+      }
+      
+      alert(`일정 등록에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
