@@ -97,24 +97,28 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
+      const response = await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
         emails: Array.from(selected)
       });
 
-      // UI 업데이트
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          selected.has(user.email) 
-            ? { ...user, isApproved: true }
-            : user
-        )
-      );
-      
-      setSelected(new Set());
-      alert(`${selected.size}명의 사용자가 승인되었습니다.`);
+      if (response.status === 200) {
+        // UI 업데이트
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            selected.has(user.email) 
+              ? { ...user, isApproved: true }
+              : user
+          )
+        );
+        
+        setSelected(new Set());
+        alert(`${selected.size}명의 사용자가 승인되었습니다.`);
+      } else {
+        throw new Error('승인 처리에 실패했습니다.');
+      }
     } catch (error) {
       console.error('일괄 승인 실패:', error);
-      alert('일괄 승인 처리 중 오류가 발생했습니다.');
+      alert(error?.response?.data?.message || '일괄 승인 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -127,24 +131,28 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
+      const response = await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
         emails: Array.from(selected)
       });
 
-      // UI 업데이트
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          selected.has(user.email) 
-            ? { ...user, deleted: true }
-            : user
-        )
-      );
-      
-      setSelected(new Set());
-      alert(`${selected.size}명의 사용자가 삭제되었습니다.`);
+      if (response.status === 200) {
+        // UI 업데이트
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            selected.has(user.email) 
+              ? { ...user, deleted: true }
+              : user
+          )
+        );
+        
+        setSelected(new Set());
+        alert(`${selected.size}명의 사용자가 삭제되었습니다.`);
+      } else {
+        throw new Error('삭제 처리에 실패했습니다.');
+      }
     } catch (error) {
       console.error('일괄 삭제 실패:', error);
-      alert('일괄 삭제 처리 중 오류가 발생했습니다.');
+      alert(error?.response?.data?.message || '일괄 삭제 처리 중 오류가 발생했습니다.');
     }
   };
 
