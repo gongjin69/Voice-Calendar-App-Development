@@ -171,11 +171,13 @@ function App() {
   };
 
   // 로그인 처리 함수 개선
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
+    setIsLoading(true);
     setApiError(null); // 이전 오류 초기화
     
     if (!gapiInitialized || !gisInitialized || !tokenClient) {
       setApiError('Google API가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      setIsLoading(false);
       return;
     }
     
@@ -187,6 +189,8 @@ function App() {
     } catch (error) {
       console.error('로그인 오류:', error.message || error);
       setApiError(`로그인 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -218,61 +222,51 @@ function App() {
   const renderLoginButton = () => {
     if (!isSignedIn) {
       return (
-        <div>
-          {apiError && (
-            <div style={{ 
-              padding: '10px', 
-              backgroundColor: '#ffeeee', 
-              color: '#cc0000', 
-              borderRadius: '5px', 
-              marginBottom: '10px',
-              fontSize: '14px',
-              border: '1px solid #cc0000'
-            }}>
-              ⚠️ {apiError}
-              <button 
-                onClick={() => setApiError(null)} 
-                style={{
-                  marginLeft: '10px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#cc0000',
-                  fontWeight: 'bold'
-                }}
-              >
-                ×
-              </button>
-            </div>
+        <div className="login-section">
+          <h2>음성 일정 관리에 오신 것을 환영합니다</h2>
+          <p>구글 계정으로 로그인하여 캘린더를 관리하세요</p>
+          
+          {!gapiInitialized ? (
+            <>
+              <div className="loading"></div>
+              <p>구글 서비스 초기화 중...</p>
+            </>
+          ) : (
+            <button 
+              onClick={handleSignIn} 
+              className="btn btn-primary"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <span className="loading-small"></span>
+                  <span>로그인 중...</span>
+                </>
+              ) : (
+                <>
+                  <img 
+                    src="/google-icon.svg" 
+                    alt="구글" 
+                    style={{ width: "18px", marginRight: "8px" }} 
+                  />
+                  구글로 로그인하기
+                </>
+              )}
+            </button>
           )}
           
-          <button 
-            onClick={handleSignIn} 
-            className="login-button"
-            disabled={!gapiInitialized || !gisInitialized || !!apiError}
-          >
-            <img 
-              src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" 
-              alt="구글 로고" 
-              style={{ width: '20px', height: '20px', marginRight: '10px' }}
-            />
-            {!gapiInitialized || !gisInitialized ? '초기화 중...' : '구글 로그인'}
-          </button>
-          
-          <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
-            {!gapiInitialized || !gisInitialized ? 
-              '구글 API를 초기화하는 중입니다. 잠시만 기다려주세요.' : 
-              '구글 계정으로 로그인하여 음성 일정 관리 서비스를 이용하세요.'}
-          </p>
-
-          <div style={{ marginTop: '20px', fontSize: '14px', color: '#666', backgroundColor: '#f9f9f9', padding: '10px', borderRadius: '5px' }}>
-            <p><strong>이용 안내:</strong></p>
-            <ul style={{ paddingLeft: '20px', marginTop: '5px' }}>
-              <li>구글 로그인이 안될 경우 브라우저 캐시를 지우고 다시 시도해 보세요.</li>
-              <li>팝업이 차단된 경우 브라우저 설정에서 팝업 허용을 확인해 주세요.</li>
-              <li>문제가 지속되면 다른 브라우저로 시도해 보세요.</li>
-            </ul>
-          </div>
+          {apiError && (
+            <div style={{ 
+              marginTop: "1rem", 
+              color: "var(--error)", 
+              backgroundColor: "var(--error-bg)",
+              padding: "0.75rem",
+              borderRadius: "var(--border-radius)",
+              fontSize: "0.9rem"
+            }}>
+              {apiError}
+            </div>
+          )}
         </div>
       );
     }
@@ -516,24 +510,53 @@ function App() {
 
   const checkApprovalStatus = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/users/approval-status/${userEmail}`);
+      // 로컬 개발 환경 또는 실제 배포된 URL 사용
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      console.log('API 접근 URL:', baseUrl);
+      
+      const response = await axios.get(`${baseUrl}/api/users/approval-status/${userEmail}`, {
+        timeout: 8000, // 타임아웃 증가
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+      
+      console.log('승인 상태 응답:', response.data);
       setIsApproved(response.data.isApproved);
       setAccessRequestSent(response.data.requestExists);
     } catch (error) {
-      console.error('승인 상태 확인 실패:', error);
+      console.error('승인 상태 확인 실패:', error.message || error);
+      // 서버 응답이 없으면 개발 편의를 위해 임시로 접근 허용 (실제 프로덕션에서는 제거)
+      if (process.env.NODE_ENV === 'development' || !import.meta.env.PROD) {
+        console.log('개발 환경에서 자동 승인 처리');
+        setIsApproved(true);
+      }
     }
   };
 
   const requestAccess = async () => {
     try {
+      // 로딩 표시
+      setIsLoading(true);
+      
+      // 로컬 개발 환경 또는 실제 배포된 URL 사용
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      
       // 접근 요청 생성
-      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/access-requests`, {
+      await axios.post(`${baseUrl}/api/access-requests`, {
         email: userEmail,
         name: userEmail.split('@')[0],
+      }, {
+        timeout: 10000, // 10초 타임아웃
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
 
       // 마스터 관리자에게 이메일 발송
-      await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/send-email`, {
+      await axios.post(`${baseUrl}/api/send-email`, {
         to: MASTER_ADMIN_EMAIL,
         subject: '새로운 사용자 접근 요청',
         text: `
@@ -545,50 +568,121 @@ function App() {
           
           관리자 대시보드에서 승인하시거나 이 이메일에 회신하여 승인하실 수 있습니다.
         `
+      }, {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
 
       setAccessRequestSent(true);
       alert('접근 요청이 전송되었습니다. 관리자의 승인을 기다려주세요.');
     } catch (error) {
-      console.error('접근 요청 실패:', error);
-      alert('접근 요청 중 오류가 발생했습니다. 나중에 다시 시도해주세요.');
+      console.error('접근 요청 실패:', error.message || error);
+      // 개발 환경에서는 자동 승인 처리
+      if (process.env.NODE_ENV === 'development' || !import.meta.env.PROD) {
+        console.log('개발 환경에서 자동 승인 처리');
+        setIsApproved(true);
+        setAccessRequestSent(true);
+        alert('개발 환경: 자동으로 접근 권한이 승인되었습니다.');
+      } else {
+        alert('접근 요청 중 오류가 발생했습니다. 나중에 다시 시도해주세요.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // 관리자 여부 확인
   const isAdmin = userEmail && ADMIN_EMAILS.includes(userEmail);
 
-  // 접근 권한이 없는 경우 표시할 컴포넌트
+  // 접근 권한이 없는 경우 표시할 컴포넌트 (UI 개선)
   const renderAccessDenied = () => (
     <div style={{ 
       padding: '2rem', 
       textAlign: 'center',
       maxWidth: '600px',
-      margin: '0 auto'
+      margin: '0 auto',
+      backgroundColor: 'white',
+      borderRadius: '10px',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+      marginTop: '20px'
     }}>
+      <img 
+        src={`https://www.gravatar.com/avatar/${userEmail ? md5(userEmail) : ''}?d=mp`}
+        alt="사용자 아바타"
+        style={{ 
+          width: '80px', 
+          height: '80px', 
+          borderRadius: '50%',
+          border: '3px solid #4285f4',
+          marginBottom: '20px'
+        }}
+      />
+      
       <h2 style={{ marginBottom: '1rem', color: '#2C3E50' }}>접근 권한이 필요합니다</h2>
-      <p style={{ marginBottom: '2rem', color: '#666' }}>
-        이 서비스를 이용하기 위해서는 관리자의 승인이 필요합니다.
+      
+      <p style={{ marginBottom: '1.5rem', color: '#666' }}>
+        <strong>{userEmail}</strong>님, 음성 일정 관리 서비스를 이용하기 위해서는 관리자의 승인이 필요합니다.
       </p>
-      {!accessRequestSent ? (
+      
+      {isLoading ? (
+        <div style={{ marginBottom: '20px' }}>
+          <p>요청 처리 중...</p>
+          <div style={{ 
+            width: '40px', 
+            height: '40px', 
+            border: '4px solid #f3f3f3', 
+            borderTop: '4px solid #3498db', 
+            borderRadius: '50%',
+            margin: '0 auto',
+            animation: 'spin 2s linear infinite'
+          }}></div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      ) : !accessRequestSent ? (
         <button 
           onClick={requestAccess}
           style={{
-            backgroundColor: 'var(--primary-color)',
+            backgroundColor: '#4285f4',
             color: 'white',
             padding: '0.8rem 1.5rem',
             borderRadius: '8px',
             border: 'none',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontSize: '16px',
+            transition: 'all 0.2s ease'
           }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#3367d6'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#4285f4'}
         >
           접근 권한 요청하기
         </button>
       ) : (
-        <p style={{ color: 'var(--secondary-color)' }}>
-          ✓ 접근 요청이 전송되었습니다. 관리자의 승인을 기다려주세요.
-        </p>
+        <div style={{ 
+          backgroundColor: '#e8f5e9', 
+          padding: '15px',
+          borderRadius: '8px',
+          color: '#2e7d32',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px'
+        }}>
+          <span style={{ fontSize: '24px' }}>✓</span>
+          <span>접근 요청이 전송되었습니다. 관리자의 승인을 기다려주세요.</span>
+        </div>
       )}
+      
+      <p style={{ marginTop: '20px', fontSize: '14px', color: '#888' }}>
+        관리자 이메일: {MASTER_ADMIN_EMAIL}
+      </p>
     </div>
   );
 
