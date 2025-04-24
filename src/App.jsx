@@ -498,16 +498,23 @@ function App() {
         console.log('날짜 정보를 인식하지 못했습니다. 현재 시간으로 설정됩니다.');
       }
 
-      const endDateTime = new Date(eventDateTime.getTime() + 3600000); // 1시간 후
+      // 종료 시간을 시작 시간보다 1시간 뒤로 설정
+      const endDateTime = new Date(eventDateTime.getTime() + 3600000);
+
+      // 시작 시간이 종료 시간보다 늦은지 확인
+      if (eventDateTime >= endDateTime) {
+        throw new Error('종료 시간이 시작 시간보다 빠릅니다.');
+      }
 
       const newEvent = {
         summary: transcript || '새 일정',
+        description: '', // 설명 필드 추가
         start: {
-          dateTime: eventDateTime.toISOString(),
+          dateTime: eventDateTime.toISOString(), // RFC 3339 형식으로 변환
           timeZone: 'Asia/Seoul',
         },
         end: {
-          dateTime: endDateTime.toISOString(),
+          dateTime: endDateTime.toISOString(), // RFC 3339 형식으로 변환
           timeZone: 'Asia/Seoul',
         },
         reminders: {
@@ -518,6 +525,11 @@ function App() {
           ],
         },
       };
+
+      // 필수 필드 검증
+      if (!newEvent.summary || !newEvent.start.dateTime || !newEvent.end.dateTime) {
+        throw new Error('필수 필드(제목, 시작 시간, 종료 시간)가 누락되었습니다.');
+      }
 
       console.log('생성할 일정 정보:', newEvent);
       
@@ -546,27 +558,22 @@ function App() {
       
       // 구글 API 클라이언트 상태 확인
       if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
-        console.error('구글 API 클라이언트가 초기화되지 않았습니다.');
-        alert('구글 API 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 후 다시 시도해주세요.');
-        return;
+        throw new Error('구글 API 클라이언트가 초기화되지 않았습니다.');
       }
 
       // 토큰 재발급이 필요한 경우 처리
       if (!window.gapi.client.getToken()) {
-        console.log('토큰이 없습니다. 재로그인이 필요합니다.');
-        alert('인증이 만료되었습니다. 다시 로그인해주세요.');
-        handleSignOut();
-        return;
+        throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
       }
 
       // 실제 등록할 이벤트 객체 생성 (dateTimeSet 속성 제거)
-      const { dateTimeSet, ...eventToCreate } = eventToConfirm;
+      const { dateTimeSet, id, ...eventToCreate } = eventToConfirm;
       
       console.log('일정 생성 요청:', eventToCreate);
 
       // 일정 생성 요청 전송
       const response = await window.gapi.client.calendar.events.insert({
-        calendarId: 'primary', // 기본 캘린더에 일정 추가
+        calendarId: 'primary',
         resource: eventToCreate,
       });
 
@@ -597,8 +604,7 @@ function App() {
         // 전체 일정 목록 새로고침
         await fetchRecentEvents();
       } else {
-        console.error('일정 생성 응답에 ID가 없습니다:', response);
-        alert('일정이 생성되었으나 응답에 문제가 있습니다. 캘린더를 새로고침해 주세요.');
+        throw new Error('일정 생성 응답에 ID가 없습니다.');
       }
     } catch (error) {
       console.error('일정 등록 오류:', error);
@@ -608,7 +614,14 @@ function App() {
         console.error('API 오류 상세:', error.result.error);
       }
       
-      alert(`일정 등록에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+      let errorMessage = '일정 등록에 실패했습니다: ';
+      if (error.result && error.result.error && error.result.error.message) {
+        errorMessage += error.result.error.message;
+      } else {
+        errorMessage += error.message || '알 수 없는 오류';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsLoading(false);
     }
