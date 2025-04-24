@@ -709,8 +709,7 @@ function App() {
   // 체크박스 상태 변경 핸들러
   const handleEventCheckboxChange = (eventId) => {
     setSelectedEvents(prev => {
-      const isSelected = prev.includes(eventId);
-      if (isSelected) {
+      if (prev.includes(eventId)) {
         return prev.filter(id => id !== eventId);
       } else {
         return [...prev, eventId];
@@ -1045,123 +1044,33 @@ function App() {
 
   // 일정 목록 렌더링
   const renderEventList = () => {
+    if (!events || events.length === 0) {
+      return (
+        <div className="text-center text-gray-500 py-4">
+          일정이 없습니다.
+        </div>
+      );
+    }
+
     return (
-      <div className="events-container" style={{ 
-        maxHeight: '400px', 
-        overflowY: 'auto',
-        padding: '20px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '10px'
-      }}>
-        {events.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '40px 20px',
-            color: '#6c757d'
-          }}>
-            {isLoading ? '일정을 불러오는 중...' : '등록된 일정이 없습니다.'}
-          </div>
-        ) : (
-          events.map((event) => (
-            <div 
-              key={event.id} 
-              className={`event-item ${selectedEvents.includes(event.id) ? 'selected-event' : ''}`}
-              style={{
-                padding: '15px',
-                marginBottom: '15px',
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '15px',
-                transition: 'all 0.2s ease',
-                border: selectedEvents.includes(event.id) ? '2px solid #4285f4' : '1px solid #eee'
-              }}
-            >
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                padding: '8px'
-              }}>
-                <input 
-                  type="checkbox" 
-                  checked={selectedEvents.includes(event.id)}
-                  onChange={() => handleEventCheckboxChange(event.id)}
-                  style={{ 
-                    width: '20px',
-                    height: '20px',
-                    cursor: 'pointer',
-                    accentColor: '#4285f4'
-                  }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '8px'
-                }}>
-                  <h3 style={{ 
-                    margin: 0, 
-                    color: '#333',
-                    fontSize: '16px',
-                    fontWeight: '600'
-                  }}>
-                    {event.summary}
-                  </h3>
-                  <span style={{ 
-                    backgroundColor: event.calendarColor || '#4285f4',
-                    color: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
-                    {event.calendarTitle}
-                  </span>
-                </div>
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: '#666',
-                  fontSize: '14px'
-                }}>
-                  <span role="img" aria-label="calendar">📅</span>
-                  {new Date(event.start.dateTime || event.start.date).toLocaleString('ko-KR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    weekday: 'short'
-                  })}
-                </div>
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: '#666',
-                  fontSize: '14px',
-                  marginTop: '4px'
-                }}>
-                  <span role="img" aria-label="time">🕒</span>
-                  {new Date(event.start.dateTime || event.start.date).toLocaleString('ko-KR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                  {' ~ '}
-                  {new Date(event.end.dateTime || event.end.date).toLocaleString('ko-KR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                </div>
-              </div>
+      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+        {events.map((event) => (
+          <div key={event.id} className="flex items-start gap-2 p-3 bg-white rounded-lg shadow">
+            <input
+              type="checkbox"
+              checked={selectedEvents.includes(event.id)}
+              onChange={() => handleEventCheckboxChange(event.id)}
+              className="mt-1 h-4 w-4 accent-blue-600 cursor-pointer"
+            />
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">{event.summary}</h3>
+              <p className="text-sm text-gray-500">
+                {new Date(event.start.dateTime || event.start.date).toLocaleString()} ~{' '}
+                {new Date(event.end.dateTime || event.end.date).toLocaleString()}
+              </p>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
     );
   };
