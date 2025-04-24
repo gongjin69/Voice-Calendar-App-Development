@@ -1054,7 +1054,7 @@ function App() {
   const renderEventList = () => {
     if (!events || events.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-8 bg-white rounded-lg shadow">
+        <div className="flex flex-col items-center justify-center py-8">
           <span role="img" aria-label="calendar" style={{ fontSize: '48px' }}>📅</span>
           <p className="mt-4 text-gray-500 text-lg">등록된 일정이 없습니다.</p>
         </div>
@@ -1062,7 +1062,7 @@ function App() {
     }
 
     return (
-      <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+      <div className="space-y-4">
         {events.map((event) => {
           const startDate = new Date(event.start.dateTime || event.start.date);
           const endDate = new Date(event.end.dateTime || event.end.date);
@@ -1071,26 +1071,24 @@ function App() {
           return (
             <div 
               key={event.id} 
-              className={`flex items-start gap-3 p-4 bg-white rounded-lg shadow-md transition-all duration-200 hover:shadow-lg ${
-                selectedEvents.includes(event.id) ? 'border-2 border-blue-500' : 'border border-gray-100'
-              }`}
+              className={`event-item ${selectedEvents.includes(event.id) ? 'selected' : ''}`}
             >
               <input
                 type="checkbox"
                 checked={selectedEvents.includes(event.id)}
                 onChange={() => handleEventCheckboxChange(event.id)}
-                className="mt-1.5 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="event-checkbox"
               />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-medium text-gray-900 text-lg truncate">{event.summary}</h3>
+                  <h3 className="font-medium text-lg">{event.summary}</h3>
                   {isToday && (
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">오늘</span>
                   )}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-gray-500">
                   <div className="flex items-center gap-1">
-                    <span role="img" aria-label="calendar" className="text-gray-400">📅</span>
+                    <span role="img" aria-label="calendar">📅</span>
                     {startDate.toLocaleDateString('ko-KR', { 
                       year: 'numeric', 
                       month: 'long', 
@@ -1099,7 +1097,7 @@ function App() {
                     })}
                   </div>
                   <div className="flex items-center gap-1">
-                    <span role="img" aria-label="time" className="text-gray-400">⏰</span>
+                    <span role="img" aria-label="time">⏰</span>
                     {startDate.toLocaleTimeString('ko-KR', { 
                       hour: '2-digit', 
                       minute: '2-digit',
@@ -1114,7 +1112,7 @@ function App() {
                 {event.calendarTitle && (
                   <div className="mt-2">
                     <span 
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      className="inline-block px-2 py-1 text-xs rounded-full"
                       style={{
                         backgroundColor: event.calendarColor + '20',
                         color: event.calendarColor
@@ -1135,52 +1133,20 @@ function App() {
   // 음성 녹음 컨트롤 렌더링
   const renderVoiceControls = () => {
     return (
-      <div className="voice-control-section" style={{
-        backgroundColor: 'white',
-        padding: '20px',
-        borderRadius: '10px',
-        marginBottom: '20px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          marginBottom: '15px',
-          gap: '10px'
-        }}>
-          <h2 style={{ margin: 0, color: '#333' }}>음성 인식</h2>
-          <span style={{ 
-            backgroundColor: listening ? '#28a745' : '#dc3545',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '12px',
-            fontSize: '12px'
-          }}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+            listening ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
             {listening ? '녹음 중' : '대기 중'}
           </span>
         </div>
 
-        <div style={{ 
-          display: 'flex', 
-          gap: '10px', 
-          marginBottom: '20px'
-        }}>
+        <div className="flex gap-2">
           <button 
             onClick={startVoiceRecording}
             disabled={listening}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: listening ? '#6c757d' : '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: listening ? 'not-allowed' : 'pointer',
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
+            className={`btn ${listening ? 'btn-secondary' : 'btn-success'}`}
           >
             <span role="img" aria-label="microphone">🎤</span>
             녹음 시작
@@ -1188,87 +1154,31 @@ function App() {
           <button 
             onClick={stopVoiceRecording}
             disabled={!listening}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: !listening ? '#6c757d' : '#dc3545',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: !listening ? 'not-allowed' : 'pointer',
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
+            className={`btn ${!listening ? 'btn-secondary' : 'btn-danger'}`}
           >
             <span role="img" aria-label="stop">⏹️</span>
             녹음 중지
           </button>
           <button 
             onClick={resetTranscript}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#17a2b8',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
+            className="btn btn-primary"
           >
             <span role="img" aria-label="reset">🔄</span>
             초기화
           </button>
         </div>
 
-        <div style={{
-          backgroundColor: '#f8f9fa',
-          padding: '15px',
-          borderRadius: '5px',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ 
-            margin: '0 0 10px 0',
-            color: '#333',
-            fontSize: '14px'
-          }}>
-            인식된 내용
-          </h3>
-          <p style={{ 
-            margin: 0,
-            color: '#666',
-            minHeight: '50px',
-            whiteSpace: 'pre-wrap'
-          }}>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-sm font-medium mb-2">인식된 내용</h3>
+          <p className="min-h-[50px] whitespace-pre-wrap text-gray-600">
             {transcript || '음성을 인식하지 못했습니다. 다시 시도해주세요.'}
           </p>
         </div>
 
-        <div style={{ 
-          display: 'flex', 
-          gap: '10px'
-        }}>
+        <div className="flex gap-2">
           <button 
             onClick={createEvent}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#4285f4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              flex: 1,
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
+            className="btn btn-primary flex-1"
           >
             <span role="img" aria-label="calendar">📅</span>
             일정 추가하기
@@ -1277,40 +1187,14 @@ function App() {
             <>
               <button 
                 onClick={() => editSelectedEvent()}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: '#ffc107',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  flex: 1,
-                  fontSize: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
+                className="btn btn-warning flex-1"
               >
                 <span role="img" aria-label="edit">✏️</span>
                 일정 수정하기
               </button>
               <button 
                 onClick={() => deleteSelectedEvents(selectedEvents)}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  flex: 1,
-                  fontSize: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
+                className="btn btn-danger flex-1"
               >
                 <span role="img" aria-label="delete">🗑️</span>
                 일정 삭제하기
@@ -1371,85 +1255,60 @@ function App() {
   }
 
   return (
-    <div style={{ 
-      padding: 0, 
-      fontFamily: 'Pretendard', 
-      maxWidth: '100%', 
-      margin: '0 auto',
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, var(--background-color) 0%, var(--light-background) 100%)'
-    }}>
-      <div style={{
-        padding: '20px',
-        textAlign: 'center',
-        marginBottom: '20px'
-      }}>
-        <div style={{ 
-          marginBottom: '40px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '20px'
-        }}>
-          <img 
-            src="/ewc-voice-logo.png" 
-            alt="EWC VOICE Calendar" 
-            style={{ 
-              height: 'auto',
-              maxWidth: '300px',
-              width: '100%',
-              objectFit: 'contain'
-            }} 
-          />
-        </div>
-
+    <div className="app-container">
+      <header className="app-header">
+        <img 
+          src="/ewc-voice-logo.png" 
+          alt="EWC VOICE Calendar" 
+          className="app-logo"
+        />
         {renderLoginButton()}
+      </header>
 
-        {isSignedIn && (
-          <>
-            {isAdmin && showAdminDashboard ? (
-              <AdminDashboard userEmail={userEmail} />
-            ) : (
-              isApproved ? (
-                <div style={{ padding: '0 20px' }}>
+      {isSignedIn && (
+        <div className="content-wrapper">
+          {isAdmin && showAdminDashboard ? (
+            <AdminDashboard userEmail={userEmail} />
+          ) : (
+            isApproved ? (
+              <div className="dashboard-grid">
+                {/* 음성 녹음 섹션 */}
+                <section className="voice-control-card">
+                  <h2 className="text-xl font-semibold mb-4">음성 인식</h2>
                   {renderVoiceControls()}
+                </section>
+
+                {/* 일정 목록 섹션 */}
+                <section className="event-list-card">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold">내 일정 목록</h2>
+                    <button 
+                      onClick={fetchRecentEvents}
+                      className="btn btn-primary"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <span className="loading"></span>
+                      ) : (
+                        <>
+                          <span role="img" aria-label="refresh">🔄</span>
+                          새로고침
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <div className="event-list">
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      marginBottom: '20px'
-                    }}>
-                      <h2 style={{ color: '#333' }}>내 일정 목록</h2>
-                      <button 
-                        onClick={fetchRecentEvents}
-                        style={{ 
-                          padding: '8px 16px',
-                          backgroundColor: '#6c757d',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '5px',
-                          cursor: isLoading ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}
-                        disabled={isLoading}
-                      >
-                        <span role="img" aria-label="refresh">🔄</span>
-                        {isLoading ? '불러오는 중...' : '새로고침'}
-                      </button>
-                    </div>
                     {renderEventList()}
                   </div>
-                </div>
-              ) : (
-                renderAccessDenied()
-              )
-            )}
-          </>
-        )}
-      </div>
+                </section>
+              </div>
+            ) : (
+              renderAccessDenied()
+            )
+          )}
+        </div>
+      )}
+
       {renderEventConfirmModal()}
     </div>
   );
