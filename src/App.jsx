@@ -1206,10 +1206,10 @@ function App() {
       }}>
         <div style={{ marginBottom: '20px' }}>
           <img 
-            src="/ewc-kids-logo.png" 
+            src="/ewc-voice-logo.png" 
             alt="EWC KIDS" 
             style={{ 
-              height: '60px',
+              height: '140px',
               marginBottom: '20px',
               maxWidth: '100%',
               objectFit: 'contain'
