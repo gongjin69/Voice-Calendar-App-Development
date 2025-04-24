@@ -1206,7 +1206,7 @@ function App() {
       }}>
         <div style={{ marginBottom: '20px' }}>
           <img 
-            src="/ewc-logo.png" 
+            src="/ewc-kids-logo.png" 
             alt="EWC KIDS" 
             style={{ 
               height: '60px',
