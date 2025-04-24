@@ -1384,7 +1384,7 @@ function App() {
           gap: '20px'
         }}>
           <img 
-            src="/ewc-kids-logo.png" 
+            src="/ewc-voice-logo.png" 
             alt="EWC VOICE Calendar" 
             style={{ 
               height: 'auto',
