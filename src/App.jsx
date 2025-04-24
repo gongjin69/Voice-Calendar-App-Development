@@ -158,6 +158,14 @@ function App() {
       if (userInfo && userInfo.email) {
         setUserEmail(userInfo.email);
         setIsSignedIn(true);
+        
+        // 관리자 여부 확인
+        const isUserAdmin = ADMIN_EMAILS.includes(userInfo.email);
+        if (isUserAdmin) {
+          console.log('관리자 계정으로 로그인됨:', userInfo.email);
+          setIsApproved(true); // 관리자는 자동으로 승인
+        }
+        
         fetchRecentEvents();
         console.log("사용자 정보 가져오기 성공");
       } else {
@@ -510,6 +518,13 @@ function App() {
 
   const checkApprovalStatus = async () => {
     try {
+      // 관리자 계정인 경우 자동으로 승인 처리
+      if (ADMIN_EMAILS.includes(userEmail)) {
+        console.log('관리자 계정으로 자동 승인 처리');
+        setIsApproved(true);
+        return;
+      }
+      
       // 로컬 개발 환경 또는 실제 배포된 URL 사용
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
       console.log('API 접근 URL:', baseUrl);
@@ -683,6 +698,26 @@ function App() {
       <p style={{ marginTop: '20px', fontSize: '14px', color: '#888' }}>
         관리자 이메일: {MASTER_ADMIN_EMAIL}
       </p>
+      
+      {/* 디버깅 정보 추가 */}
+      <div style={{ 
+        marginTop: '20px', 
+        padding: '10px', 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '5px',
+        textAlign: 'left',
+        fontSize: '12px',
+        color: '#666'
+      }}>
+        <details>
+          <summary>문제 해결 정보</summary>
+          <p>현재 로그인 이메일: <strong>{userEmail}</strong></p>
+          <p>관리자 이메일 목록: <strong>{ADMIN_EMAILS.join(', ')}</strong></p>
+          <p>관리자 여부: <strong>{ADMIN_EMAILS.includes(userEmail) ? '예' : '아니오'}</strong></p>
+          <p>승인 상태: <strong>{isApproved ? '승인됨' : '승인되지 않음'}</strong></p>
+          <p>접근 요청 전송 여부: <strong>{accessRequestSent ? '전송됨' : '전송되지 않음'}</strong></p>
+        </details>
+      </div>
     </div>
   );
 
