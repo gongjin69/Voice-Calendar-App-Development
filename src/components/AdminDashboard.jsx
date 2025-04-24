@@ -20,6 +20,7 @@ const AdminDashboard = ({ userEmail }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [selected, setSelected] = useState(new Set());
 
   useEffect(() => {
     if (!ADMIN_EMAILS.includes(userEmail)) {
@@ -34,6 +35,7 @@ const AdminDashboard = ({ userEmail }) => {
     try {
       setIsLoading(true);
       setError(null);
+      setSelected(new Set()); // 선택 초기화
       
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
       const response = await axios.get(`${baseUrl}/api/admin/users`);
@@ -70,6 +72,83 @@ const AdminDashboard = ({ userEmail }) => {
     }
   };
 
+  // 체크박스 핸들러
+  const toggleOne = (email) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(email) ? next.delete(email) : next.add(email);
+      return next;
+    });
+  };
+
+  const toggleAll = (userList) => {
+    setSelected(prev =>
+      prev.size === userList.length ? new Set() : new Set(userList.map(u => u.email))
+    );
+  };
+
+  // 일괄 처리 함수
+  const handleBulkApproval = async () => {
+    if (!selected.size) return;
+    
+    if (!window.confirm(`선택한 ${selected.size}명의 사용자를 승인하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
+        emails: Array.from(selected)
+      });
+
+      // UI 업데이트
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          selected.has(user.email) 
+            ? { ...user, isApproved: true }
+            : user
+        )
+      );
+      
+      setSelected(new Set());
+      alert(`${selected.size}명의 사용자가 승인되었습니다.`);
+    } catch (error) {
+      console.error('일괄 승인 실패:', error);
+      alert('일괄 승인 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selected.size) return;
+    
+    if (!window.confirm(`정말로 선택한 ${selected.size}명의 사용자를 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
+        emails: Array.from(selected)
+      });
+
+      // UI 업데이트
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          selected.has(user.email) 
+            ? { ...user, deleted: true }
+            : user
+        )
+      );
+      
+      setSelected(new Set());
+      alert(`${selected.size}명의 사용자가 삭제되었습니다.`);
+    } catch (error) {
+      console.error('일괄 삭제 실패:', error);
+      alert('일괄 삭제 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 개별 처리 함수
   const handleApproval = async (email, approve) => {
     if (!email) {
       alert('유효하지 않은 사용자입니다.');
@@ -102,6 +181,10 @@ const AdminDashboard = ({ userEmail }) => {
   const softDelete = async (email) => {
     if (!email) {
       alert('유효하지 않은 사용자입니다.');
+      return;
+    }
+
+    if (!window.confirm('정말 이 사용자를 삭제하시겠습니까?')) {
       return;
     }
 
@@ -200,89 +283,135 @@ const AdminDashboard = ({ userEmail }) => {
   // 활성 사용자와 삭제된 사용자 필터링
   const activeUsers = users.filter(u => !u.deleted);
   const deletedUsers = users.filter(u => u.deleted);
+  const currentUsers = showDeleted ? deletedUsers : activeUsers;
+  const allChecked = selected.size === currentUsers.length && currentUsers.length > 0;
 
   return (
     <div className="min-h-screen px-4 py-6 bg-gray-50">
-      <h1 className="text-2xl font-bold mb-4">👤 사용자 관리</h1>
+      <div className="w-full max-w-[420px] md:max-w-5xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">👤 사용자 관리</h1>
 
-      {/* 탭 */}
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setShowDeleted(false)}
-          className={!showDeleted ? 'font-semibold border-b-2 border-blue-600' : 'text-gray-500'}
-        >
-          활성 사용자 ({activeUsers.length})
-        </button>
-        <button
-          onClick={() => setShowDeleted(true)}
-          className={showDeleted ? 'font-semibold border-b-2 border-blue-600' : 'text-gray-500'}
-        >
-          삭제된 사용자 ({deletedUsers.length})
-        </button>
-      </div>
+        {/* 탭 */}
+        <div className="flex gap-4 mb-6">
+          <button
+            onClick={() => {
+              setShowDeleted(false);
+              setSelected(new Set());
+            }}
+            className={!showDeleted ? 'font-semibold border-b-2 border-blue-600' : 'text-gray-500'}
+          >
+            활성 사용자 ({activeUsers.length})
+          </button>
+          <button
+            onClick={() => {
+              setShowDeleted(true);
+              setSelected(new Set());
+            }}
+            className={showDeleted ? 'font-semibold border-b-2 border-blue-600' : 'text-gray-500'}
+          >
+            삭제된 사용자 ({deletedUsers.length})
+          </button>
+        </div>
 
-      {/* 테이블 */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2">#</th>
-              <th className="p-2">이메일</th>
-              <th className="p-2">이름</th>
-              <th className="p-2">요청일</th>
-              <th className="p-2">상태</th>
-              <th className="p-2">액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(showDeleted ? deletedUsers : activeUsers).map((user, idx) => (
-              <tr key={user.email} className="border-b last:border-0">
-                <td className="p-2 text-center">{idx + 1}</td>
-                <td className="p-2">{user.email}</td>
-                <td className="p-2">{user.name}</td>
-                <td className="p-2">
-                  {new Date(user.requestDate).toLocaleDateString()}
-                </td>
-                <td className="p-2">
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    user.isApproved 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {user.isApproved ? '승인됨' : '대기중'}
-                  </span>
-                </td>
-                <td className="p-2">
-                  {!showDeleted ? (
-                    <div className="flex gap-2">
-                      {!user.isApproved && (
-                        <button
-                          onClick={() => handleApproval(user.email, true)}
-                          className="text-green-500 hover:underline"
-                        >
-                          승인
-                        </button>
-                      )}
-                      <button
-                        onClick={() => softDelete(user.email)}
-                        className="text-red-500 hover:underline"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => restoreUser(user.email)}
-                      className="text-blue-500 hover:underline"
-                    >
-                      복구
-                    </button>
-                  )}
-                </td>
+        {/* 일괄 처리 버튼 */}
+        {!showDeleted && selected.size > 0 && (
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={handleBulkApproval}
+              disabled={!selected.size}
+              className="px-3 py-1.5 rounded bg-emerald-600 text-white disabled:opacity-40 hover:bg-emerald-700 transition-colors"
+            >
+              선택 승인 ({selected.size})
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={!selected.size}
+              className="px-3 py-1.5 rounded bg-red-600 text-white disabled:opacity-40 hover:bg-red-700 transition-colors"
+            >
+              선택 삭제 ({selected.size})
+            </button>
+          </div>
+        )}
+
+        {/* 테이블 */}
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-2 w-[42px]">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={() => toggleAll(currentUsers)}
+                    className="accent-blue-600 w-4 h-4"
+                  />
+                </th>
+                <th className="p-2 w-[42px]">#</th>
+                <th className="p-2">이메일</th>
+                <th className="p-2">이름</th>
+                <th className="p-2">요청일</th>
+                <th className="p-2">상태</th>
+                <th className="p-2">액션</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {currentUsers.map((user, idx) => (
+                <tr key={user.email} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="p-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(user.email)}
+                      onChange={() => toggleOne(user.email)}
+                      className="accent-blue-600 w-4 h-4"
+                    />
+                  </td>
+                  <td className="p-2 text-center text-gray-500">{idx + 1}</td>
+                  <td className="p-2">{user.email}</td>
+                  <td className="p-2">{user.name}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    {new Date(user.requestDate).toLocaleDateString()}
+                  </td>
+                  <td className="p-2">
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      user.isApproved 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {user.isApproved ? '승인됨' : '대기중'}
+                    </span>
+                  </td>
+                  <td className="p-2">
+                    {!showDeleted ? (
+                      <div className="flex gap-2">
+                        {!user.isApproved && (
+                          <button
+                            onClick={() => handleApproval(user.email, true)}
+                            className="text-emerald-600 hover:text-emerald-700 hover:underline"
+                          >
+                            승인
+                          </button>
+                        )}
+                        <button
+                          onClick={() => softDelete(user.email)}
+                          className="text-red-600 hover:text-red-700 hover:underline"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => restoreUser(user.email)}
+                        className="text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        복구
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
