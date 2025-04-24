@@ -58,22 +58,27 @@ function App() {
         return;
       }
       
-      // GAPI 초기화
-      window.gapi.load('client', async () => {
-        try {
-          await window.gapi.client.init({
+      // GAPI 초기화 - 오류 처리 강화
+      try {
+        window.gapi.load('client', () => {
+          window.gapi.client.init({
             apiKey: API_KEY,
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+          }).then(() => {
+            setGapiInitialized(true);
+            console.log("GAPI 초기화 완료");
+          }).catch(error => {
+            console.error('GAPI 초기화 오류:', error.message || error);
+            setApiError(`Google API 초기화 실패: ${error.message || '알 수 없는 오류'}`);
           });
-          setGapiInitialized(true);
-        } catch (error) {
-          console.error('GAPI 초기화 오류:', error.message);
-          setApiError('Google API 초기화 실패');
-        }
-      });
+        });
+      } catch (error) {
+        console.error('GAPI 로드 오류:', error.message || error);
+        setApiError('Google API 로드 실패');
+      }
     };
     
-    // GSI 초기화
+    // GSI 초기화 - 오류 처리 강화
     const initializeGSI = () => {
       if (!window.google) {
         setTimeout(initializeGSI, 1000);
@@ -84,72 +89,88 @@ function App() {
         const client = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES,
-          callback: handleTokenResponse,
+          prompt: 'consent',
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              const tokenData = {
+                token: tokenResponse.access_token,
+                expires: Date.now() + (tokenResponse.expires_in * 1000)
+              };
+              
+              // 토큰 저장 (API 키는 저장하지 않음)
+              localStorage.setItem('google_auth_timestamp', Date.now().toString());
+              localStorage.setItem('google_access_token', tokenResponse.access_token);
+              
+              // 사용자 정보 가져오기
+              getUserInfo(tokenResponse.access_token);
+            } else {
+              console.error('토큰 응답 오류');
+              setApiError('인증 토큰을 받아오지 못했습니다.');
+            }
+          },
           error_callback: (error) => {
-            console.error('GSI 오류:', error.type);
-            setApiError(`인증 오류: ${error.type}`);
+            console.error('GSI 오류:', error.type || error);
+            setApiError(`인증 오류: ${error.type || '알 수 없는 오류'}`);
           }
         });
         
         setTokenClient(client);
         setGisInitialized(true);
+        console.log("GSI 초기화 완료");
       } catch (error) {
-        console.error('GSI 초기화 오류:', error.message);
+        console.error('GSI 초기화 오류:', error.message || error);
         setApiError('Google 인증 초기화 실패');
       }
     };
     
+    // 초기화 함수 호출
     initializeGoogleAPI();
     initializeGSI();
     
+    // 클린업 함수
     return () => {
-      // 클린업 코드
+      // 필요한 경우 클린업 로직 추가
     };
   }, []);
 
-  // 토큰 응답 처리
-  const handleTokenResponse = (response) => {
-    if (response && response.access_token) {
-      const tokenData = {
-        token: response.access_token,
-        expires: Date.now() + (response.expires_in * 1000)
-      };
-      
-      // 토큰 저장 (API 키는 저장하지 않음)
-      localStorage.setItem('google_auth_timestamp', Date.now().toString());
-      
-      // 사용자 정보 가져오기
-      getUserInfo(response.access_token);
-    } else {
-      console.error('토큰 응답 오류');
-      setApiError('인증 토큰을 받아오지 못했습니다.');
-    }
-  };
-
-  // 사용자 정보 가져오기
+  // 사용자 정보 가져오기 함수 개선
   const getUserInfo = async (token) => {
+    if (!token) {
+      console.error('토큰이 없습니다.');
+      setApiError('인증 토큰이 없습니다.');
+      return;
+    }
+
     try {
-      const userInfoResponse = await window.gapi.client.request({
-        path: 'https://www.googleapis.com/oauth2/v3/userinfo',
+      // 직접 fetch를 사용하여 사용자 정보 요청
+      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
-      const userInfo = userInfoResponse.result;
+      if (!response.ok) {
+        throw new Error(`Status: ${response.status}`);
+      }
+      
+      const userInfo = await response.json();
+      
       if (userInfo && userInfo.email) {
         setUserEmail(userInfo.email);
         setIsSignedIn(true);
         fetchRecentEvents();
+        console.log("사용자 정보 가져오기 성공");
+      } else {
+        throw new Error('사용자 이메일을 찾을 수 없습니다.');
       }
     } catch (error) {
-      console.error('사용자 정보 가져오기 오류:', error.message);
-      setApiError('사용자 정보를 가져오지 못했습니다.');
+      console.error('사용자 정보 가져오기 오류:', error.message || error);
+      setApiError(`사용자 정보 가져오기 실패: ${error.message || '알 수 없는 오류'}`);
       handleSignOut();
     }
   };
 
-  // 로그인 처리
+  // 로그인 처리 함수 개선
   const handleSignIn = () => {
     setApiError(null); // 이전 오류 초기화
     
@@ -159,22 +180,38 @@ function App() {
     }
     
     try {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({
+        prompt: 'consent',
+        login_hint: ''
+      });
     } catch (error) {
-      console.error('로그인 오류:', error.message);
-      setApiError('로그인 중 오류가 발생했습니다.');
+      console.error('로그인 오류:', error.message || error);
+      setApiError(`로그인 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
     }
   };
 
-  // 로그아웃 처리
+  // 로그아웃 처리 함수 개선
   const handleSignOut = () => {
-    // 인증 관련 데이터만 삭제 (API 키는 저장하지 않음)
+    // 인증 관련 데이터 삭제
     localStorage.removeItem('google_auth_timestamp');
+    localStorage.removeItem('google_access_token');
     
+    // 상태 초기화
     setIsSignedIn(false);
     setUserEmail('');
     setEvents([]);
     setEventId(null);
+    
+    // Google 로그아웃 (선택 사항)
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+      try {
+        window.google.accounts.oauth2.revoke(localStorage.getItem('google_access_token'), () => {
+          console.log('토큰 취소 성공');
+        });
+      } catch (error) {
+        console.error('토큰 취소 오류:', error);
+      }
+    }
   };
 
   // 로그인 버튼 렌더링
@@ -189,9 +226,23 @@ function App() {
               color: '#cc0000', 
               borderRadius: '5px', 
               marginBottom: '10px',
-              fontSize: '14px'
+              fontSize: '14px',
+              border: '1px solid #cc0000'
             }}>
               ⚠️ {apiError}
+              <button 
+                onClick={() => setApiError(null)} 
+                style={{
+                  marginLeft: '10px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#cc0000',
+                  fontWeight: 'bold'
+                }}
+              >
+                ×
+              </button>
             </div>
           )}
           
@@ -207,11 +258,21 @@ function App() {
             />
             {!gapiInitialized || !gisInitialized ? '초기화 중...' : '구글 로그인'}
           </button>
+          
           <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
             {!gapiInitialized || !gisInitialized ? 
               '구글 API를 초기화하는 중입니다. 잠시만 기다려주세요.' : 
               '구글 계정으로 로그인하여 음성 일정 관리 서비스를 이용하세요.'}
           </p>
+
+          <div style={{ marginTop: '20px', fontSize: '14px', color: '#666', backgroundColor: '#f9f9f9', padding: '10px', borderRadius: '5px' }}>
+            <p><strong>이용 안내:</strong></p>
+            <ul style={{ paddingLeft: '20px', marginTop: '5px' }}>
+              <li>구글 로그인이 안될 경우 브라우저 캐시를 지우고 다시 시도해 보세요.</li>
+              <li>팝업이 차단된 경우 브라우저 설정에서 팝업 허용을 확인해 주세요.</li>
+              <li>문제가 지속되면 다른 브라우저로 시도해 보세요.</li>
+            </ul>
+          </div>
         </div>
       );
     }
