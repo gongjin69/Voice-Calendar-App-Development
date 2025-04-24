@@ -359,17 +359,15 @@ function App() {
     }
   }, [userEmail]);
 
-  // 일정 조회 함수
+  // 일정 조회 함수 개선 - 현재 날짜부터 향후 1달만 조회
   const fetchRecentEvents = async () => {
     if (!isSignedIn || !gapiInitialized) return;
     
     setIsLoading(true);
     try {
-      // 일정 조회 시작 시간을 30일 전으로 설정 (과거 일정도 표시)
+      // 현재 시간
       const now = new Date();
-      const oneMonthAgo = new Date(now);
-      oneMonthAgo.setMonth(now.getMonth() - 1);
-      oneMonthAgo.setHours(0, 0, 0, 0);
+      now.setHours(0, 0, 0, 0); // 오늘 자정 기준
       
       // 일정 조회 종료 시간을 30일 후로 설정
       const oneMonthLater = new Date(now);
@@ -377,7 +375,7 @@ function App() {
       oneMonthLater.setHours(23, 59, 59, 999);
 
       // 구글 API 클라이언트 상태 확인
-      if (!window.gapi.client || !window.gapi.client.calendar) {
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
         console.error('구글 API 클라이언트가 초기화되지 않았습니다.');
         setApiError('구글 API가 초기화되지 않았습니다. 페이지를 새로고침해 주세요.');
         return;
@@ -390,16 +388,16 @@ function App() {
       const calendars = calendarList.result.items || [];
       const allEvents = [];
       
-      // 각 캘린더별로 일정 조회
+      // 각 캘린더별로 일정 조회 - 현재부터 미래 1달만 조회
       for (const calendar of calendars) {
         try {
           console.log(`'${calendar.summary}' 캘린더 일정 조회 시작`);
           
           const response = await window.gapi.client.calendar.events.list({
             calendarId: calendar.id,
-            timeMin: oneMonthAgo.toISOString(),
-            timeMax: oneMonthLater.toISOString(),
-            maxResults: 250, // 더 많은 일정을 가져오도록 증가
+            timeMin: now.toISOString(),      // 현재 시간부터
+            timeMax: oneMonthLater.toISOString(), // 1달 후까지
+            maxResults: 250,
             orderBy: 'startTime',
             singleEvents: true,
             showDeleted: false
@@ -420,11 +418,11 @@ function App() {
         }
       }
 
-      // 시작 시간 기준으로 정렬
+      // 시작 시간 기준으로 정렬 - 가장 가까운 미래 일정이 먼저 오도록
       allEvents.sort((a, b) => {
         const aTime = new Date(a.start.dateTime || a.start.date);
         const bTime = new Date(b.start.dateTime || b.start.date);
-        return aTime - bTime;
+        return aTime - bTime; // 오름차순 정렬 (과거 → 미래)
       });
 
       console.log('전체 일정 조회 완료, 건수:', allEvents.length);
@@ -442,22 +440,28 @@ function App() {
     }
   };
 
+  // 일정 생성 함수 개선
   const createEvent = async () => {
     if (!isSignedIn) return;
 
     try {
       setIsLoading(true);
-      const dateTimeRegex = /(\d+)월\s*(\d+)일\s*(오전|오후)?\s*(\d+)시/;
+      // 날짜와 시간을 더 정확하게 인식하는 정규식 패턴
+      const dateTimeRegex = /(\d+)월\s*(\d+)일\s*(오전|오후)?\s*(\d+)[시|반]/;
       const match = transcript.match(dateTimeRegex);
       
       let eventDateTime = new Date();
       
       if (match) {
         const [_, month, day, ampm, hour] = match;
+        console.log('인식된 날짜 정보:', month, day, ampm, hour);
+        
+        // 현재 연도를 유지하고 월과 일만 설정
         eventDateTime = new Date();
         eventDateTime.setMonth(parseInt(month) - 1);
         eventDateTime.setDate(parseInt(day));
         
+        // 시간 설정 (오전/오후 구분)
         let adjustedHour = parseInt(hour);
         if (ampm === '오후' && adjustedHour !== 12) {
           adjustedHour += 12;
@@ -466,9 +470,13 @@ function App() {
         }
         
         eventDateTime.setHours(adjustedHour, 0, 0, 0);
+        
+        console.log('설정된 일정 시간:', eventDateTime.toLocaleString());
+      } else {
+        console.log('날짜 정보를 인식하지 못했습니다. 현재 시간으로 설정됩니다.');
       }
 
-      const endDateTime = new Date(eventDateTime.getTime() + 3600000);
+      const endDateTime = new Date(eventDateTime.getTime() + 3600000); // 1시간 후
 
       const event = {
         summary: transcript || '새 일정',
@@ -492,12 +500,21 @@ function App() {
       console.log('일정 생성 시도:', event);
       
       // 구글 API 클라이언트 상태 확인
-      if (!window.gapi.client || !window.gapi.client.calendar) {
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
         console.error('구글 API 클라이언트가 초기화되지 않았습니다.');
         alert('구글 API 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 후 다시 시도해주세요.');
         return;
       }
 
+      // 토큰 재발급이 필요한 경우 처리
+      if (!window.gapi.client.getToken()) {
+        console.log('토큰이 없습니다. 재로그인이 필요합니다.');
+        alert('인증이 만료되었습니다. 다시 로그인해주세요.');
+        handleSignOut();
+        return;
+      }
+
+      // 일정 생성 요청 전송
       const response = await window.gapi.client.calendar.events.insert({
         calendarId: 'primary', // 기본 캘린더에 일정 추가
         resource: event,
@@ -506,7 +523,12 @@ function App() {
       if (response && response.result && response.result.id) {
         console.log('일정 생성 성공:', response.result);
         setEventId(response.result.id);
-        alert(`✅ 일정이 등록되었습니다! (ID: ${response.result.id.substr(0, 8)}...)\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
+        
+        // 날짜와 시간 정보를 포함한 알림 메시지
+        const eventDate = new Date(response.result.start.dateTime);
+        const formattedDate = `${eventDate.getMonth() + 1}월 ${eventDate.getDate()}일 ${eventDate.getHours()}시`;
+        
+        alert(`✅ 일정이 등록되었습니다! (${formattedDate})\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
         
         // 새로 생성된 일정을 즉시 목록에 추가
         setEvents(prevEvents => {
@@ -675,6 +697,97 @@ function App() {
 
   // 관리자 여부 확인
   const isAdmin = userEmail && ADMIN_EMAILS.includes(userEmail);
+
+  // 일정 목록 렌더링 함수 개선 - 현재일이 가장 먼저 표시되도록
+  const renderEventList = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // 날짜별로 그룹화
+    const groupedEvents = {};
+    events.forEach(event => {
+      const eventDate = new Date(event.start.dateTime || event.start.date);
+      const dateKey = eventDate.toISOString().split('T')[0];
+      
+      if (!groupedEvents[dateKey]) {
+        groupedEvents[dateKey] = [];
+      }
+      
+      groupedEvents[dateKey].push(event);
+    });
+    
+    // 날짜 키를 시간순으로 정렬 (오늘 → 미래)
+    const sortedDateKeys = Object.keys(groupedEvents).sort((a, b) => {
+      // 오늘은 항상 최상위
+      const aDate = new Date(a);
+      const bDate = new Date(b);
+      const aIsToday = aDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      const bIsToday = bDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      
+      if (aIsToday && !bIsToday) return -1;
+      if (!aIsToday && bIsToday) return 1;
+      
+      // 나머지는 날짜순
+      return aDate - bDate;
+    });
+    
+    // 날짜별 일정 목록 컴포넌트 생성
+    return sortedDateKeys.map(dateKey => {
+      const date = new Date(dateKey);
+      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      
+      return (
+        <div key={dateKey} style={{ 
+          margin: '20px 0',
+          paddingTop: isToday ? '10px' : '0',
+          borderTop: isToday ? '2px solid var(--primary)' : 'none'
+        }}>
+          <h3 style={{ 
+            textAlign: 'left', 
+            color: isToday ? 'var(--primary)' : 'var(--text-primary)',
+            fontWeight: isToday ? 'bold' : 'normal',
+            backgroundColor: isToday ? 'rgba(66, 133, 244, 0.1)' : 'transparent',
+            padding: isToday ? '8px' : '4px',
+            borderRadius: '5px'
+          }}>
+            {date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일
+            {isToday ? ' (오늘)' : ''}
+          </h3>
+          
+          {groupedEvents[dateKey].map((event) => (
+            <div 
+              key={event.id} 
+              className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
+              onClick={() => setEventId(event.id)}
+              style={{
+                borderLeftColor: event.calendarColor || 'var(--primary)',
+              }}
+            >
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-start',
+                gap: '8px'
+              }}>
+                <h3>{event.summary}</h3>
+                <span className="calendar-tag" style={{ backgroundColor: event.calendarColor }}>
+                  {event.calendarTitle}
+                </span>
+              </div>
+              <p className="event-time">
+                🕒 {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                {' - '}
+                {new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </p>
+              <p className="event-detail">
+                {event.description ? event.description : '세부 내용 없음'}
+              </p>
+            </div>
+          ))}
+        </div>
+      );
+    });
+  };
 
   // 접근 권한이 없는 경우 표시할 컴포넌트 (UI 개선)
   const renderAccessDenied = () => (
@@ -849,8 +962,10 @@ function App() {
             src="/ewc-kids-logo.svg" 
             alt="EWC KIDS" 
             style={{ 
-              height: '40px',
-              marginBottom: '30px'
+              height: '60px',
+              marginBottom: '20px',
+              maxWidth: '100%',
+              objectFit: 'contain'
             }} 
           />
           <div style={{ 
@@ -861,17 +976,13 @@ function App() {
           }}>
             <img 
               src="/voice-smile.svg" 
-              alt="Voice" 
+              alt="VOICE 구글캘린더" 
               style={{ 
-                height: '40px'
+                height: '60px',
+                maxWidth: '100%',
+                objectFit: 'contain'
               }} 
             />
-            <h1 style={{
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              margin: 0,
-              color: '#333'
-            }}>음성 일정 관리</h1>
           </div>
         </div>
 
@@ -965,33 +1076,13 @@ function App() {
                       </button>
                     </div>
                     
-                    <div className="events-container">
+                    <div className="events-container" style={{ 
+                      maxHeight: '400px', 
+                      overflowY: 'auto',
+                      padding: '10px'
+                    }}>
                       {events.length > 0 ? (
-                        events.map((event) => (
-                          <div 
-                            key={event.id} 
-                            className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
-                            onClick={() => setEventId(event.id)}
-                          >
-                            <div style={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'flex-start',
-                              gap: '8px'
-                            }}>
-                              <h3>{event.summary}</h3>
-                              <span className="calendar-tag" style={{ backgroundColor: event.calendarColor }}>
-                                {event.calendarTitle}
-                              </span>
-                            </div>
-                            <p className="event-time">
-                              🕒 시작: {new Date(event.start.dateTime || event.start.date).toLocaleString()}
-                            </p>
-                            <p className="event-time">
-                              ⏰ 종료: {new Date(event.end.dateTime || event.end.date).toLocaleString()}
-                            </p>
-                          </div>
-                        ))
+                        renderEventList()
                       ) : (
                         <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
                           {isLoading ? '일정을 불러오는 중...' : '등록된 일정이 없습니다.'}
