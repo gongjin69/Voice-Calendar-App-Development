@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120">
-  <!-- 오렌지색 스마일 -->
+  <!-- 오렌지색 원형 스마일 -->
   <circle cx="70" cy="60" r="20" fill="#FFA500"/>
   <circle cx="63" cy="55" r="3" fill="black"/>
   <circle cx="77" cy="55" r="3" fill="black"/>
   <path d="M63 65 Q70 73 77 65" stroke="black" stroke-width="2" fill="none"/>
   
   <!-- 보라색 W -->
-  <path d="M95 45 L105 75 L115 50 L125 75 L135 45" fill="#9370DB"/>
+  <path d="M95 45 L108 75 L120 50 L132 75 L145 45" fill="#9370DB"/>
   
   <!-- 빨간색 C -->
   <path d="M160 45 C145 45 140 60 145 70 C150 80 165 75 165 75" fill="#FF6347"/>
   <circle cx="167" cy="48" r="3" fill="black"/>
   
   <!-- EWC KIDS 텍스트 -->
-  <text x="195" y="70" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333333">EWC KIDS</text>
+  <text x="185" y="70" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#333333">EWC KIDS</text>
 </svg> 

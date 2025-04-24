@@ -454,6 +454,7 @@ function App() {
       const match = transcript.match(dateTimeRegex);
       
       let eventDateTime = new Date();
+      let dateTimeSet = false;
       
       if (match) {
         const [_, month, day, ampm, hour] = match;
@@ -461,6 +462,8 @@ function App() {
         
         // 현재 연도를 유지하고 월과 일만 설정
         eventDateTime = new Date();
+        
+        // 월과 일 설정 (월은 0부터 시작하므로 -1)
         eventDateTime.setMonth(parseInt(month) - 1);
         eventDateTime.setDate(parseInt(day));
         
@@ -473,6 +476,7 @@ function App() {
         }
         
         eventDateTime.setHours(adjustedHour, 0, 0, 0);
+        dateTimeSet = true;
         
         console.log('설정된 일정 시간:', eventDateTime.toLocaleString());
       } else {
@@ -500,8 +504,13 @@ function App() {
         },
       };
 
-      // 확인 모달 표시하기 위해 이벤트 정보 설정
-      setEventToConfirm(newEvent);
+      console.log('생성할 일정 정보:', newEvent);
+      
+      // 확인 모달에 표시할 정보 설정
+      setEventToConfirm({
+        ...newEvent,
+        dateTimeSet: dateTimeSet // 날짜가 정상적으로 설정되었는지 여부
+      });
       setShowEventConfirmModal(true);
       setIsLoading(false);
       
@@ -534,10 +543,15 @@ function App() {
         return;
       }
 
+      // 실제 등록할 이벤트 객체 생성 (dateTimeSet 속성 제거)
+      const { dateTimeSet, ...eventToCreate } = eventToConfirm;
+      
+      console.log('일정 생성 요청:', eventToCreate);
+
       // 일정 생성 요청 전송
       const response = await window.gapi.client.calendar.events.insert({
         calendarId: 'primary', // 기본 캘린더에 일정 추가
-        resource: eventToConfirm,
+        resource: eventToCreate,
       });
 
       if (response && response.result && response.result.id) {
@@ -550,7 +564,7 @@ function App() {
         
         // 날짜와 시간 정보를 포함한 알림 메시지
         const eventDate = new Date(response.result.start.dateTime);
-        const formattedDate = `${eventDate.getMonth() + 1}월 ${eventDate.getDate()}일 ${eventDate.getHours()}시`;
+        const formattedDate = `${eventDate.getFullYear()}년 ${eventDate.getMonth() + 1}월 ${eventDate.getDate()}일 ${eventDate.getHours()}시`;
         
         alert(`✅ 일정이 등록되었습니다! (${formattedDate})\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
         
@@ -899,6 +913,7 @@ function App() {
     
     const startDate = new Date(eventToConfirm.start.dateTime);
     const endDate = new Date(eventToConfirm.end.dateTime);
+    const dateTimeSet = eventToConfirm.dateTimeSet; // 날짜가 정상적으로 설정되었는지 여부
     
     return (
       <div className="modal-overlay" style={{
@@ -931,11 +946,31 @@ function App() {
           <div style={{ marginBottom: '20px' }}>
             <h3 style={{ color: '#555' }}>일정 시간</h3>
             <p style={{ fontSize: '16px' }}>
-              {startDate.getFullYear()}년 {startDate.getMonth() + 1}월 {startDate.getDate()}일
+              {startDate.getFullYear()}년 {startDate.getMonth() + 1}월 {startDate.getDate()}일 
+              {startDate.getDate() === new Date().getDate() ? ' (오늘)' : ''}
             </p>
             <p style={{ fontSize: '16px' }}>
-              {startDate.getHours()}시 {startDate.getMinutes()}분 ~ {endDate.getHours()}시 {endDate.getMinutes()}분
+              {startDate.getHours() < 12 ? '오전' : '오후'} {startDate.getHours() % 12 || 12}시 
+              {startDate.getMinutes() > 0 ? startDate.getMinutes() + '분' : ''} ~ 
+              {endDate.getHours() < 12 ? '오전' : '오후'} {endDate.getHours() % 12 || 12}시
+              {endDate.getMinutes() > 0 ? endDate.getMinutes() + '분' : ''}
             </p>
+            
+            {!dateTimeSet && (
+              <div style={{ 
+                marginTop: '10px', 
+                padding: '10px', 
+                backgroundColor: '#fff3cd', 
+                borderRadius: '5px',
+                borderLeft: '3px solid #ffc107'
+              }}>
+                <p style={{ color: '#856404', margin: 0, fontSize: '14px' }}>
+                  <strong>⚠️ 주의:</strong> 음성에서 날짜와 시간을 인식하지 못했습니다. 
+                  현재 날짜와 시간으로 일정이 생성됩니다. 
+                  필요하면 '수정' 버튼을 눌러 일정을 다시 말씀해주세요.
+                </p>
+              </div>
+            )}
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
@@ -1171,7 +1206,7 @@ function App() {
       }}>
         <div style={{ marginBottom: '20px' }}>
           <img 
-            src="/ewc-kids-logo.svg" 
+            src="/ewc-logo.png" 
             alt="EWC KIDS" 
             style={{ 
               height: '60px',
