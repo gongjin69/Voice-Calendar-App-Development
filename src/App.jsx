@@ -5,6 +5,7 @@ import axios from 'axios';
 import md5 from 'md5';
 import './App.css';
 import AdminDashboard from './components/AdminDashboard';
+import { parseKorDateTime, toRFC3339 } from './utils/korDateParser';
 
 // 관리자 이메일 목록
 const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
@@ -464,57 +465,29 @@ function App() {
 
     try {
       setIsLoading(true);
-      // 날짜와 시간을 더 정확하게 인식하는 정규식 패턴
-      const dateTimeRegex = /(\d+)월\s*(\d+)일\s*(오전|오후)?\s*(\d+)[시|반]/;
-      const match = transcript.match(dateTimeRegex);
       
-      let eventDateTime = new Date();
-      let dateTimeSet = false;
+      // 음성 인식 텍스트에서 날짜/시간 정보 파싱
+      const parsedDateTime = parseKorDateTime(transcript);
       
-      if (match) {
-        const [_, month, day, ampm, hour] = match;
-        console.log('인식된 날짜 정보:', month, day, ampm, hour);
-        
-        // 현재 연도를 유지하고 월과 일만 설정
-        eventDateTime = new Date();
-        
-        // 월과 일 설정 (월은 0부터 시작하므로 -1)
-        eventDateTime.setMonth(parseInt(month) - 1);
-        eventDateTime.setDate(parseInt(day));
-        
-        // 시간 설정 (오전/오후 구분)
-        let adjustedHour = parseInt(hour);
-        if (ampm === '오후' && adjustedHour !== 12) {
-          adjustedHour += 12;
-        } else if (ampm === '오전' && adjustedHour === 12) {
-          adjustedHour = 0;
-        }
-        
-        eventDateTime.setHours(adjustedHour, 0, 0, 0);
-        dateTimeSet = true;
-        
-        console.log('설정된 일정 시간:', eventDateTime.toLocaleString());
-      } else {
-        console.log('날짜 정보를 인식하지 못했습니다. 현재 시간으로 설정됩니다.');
+      if (!parsedDateTime) {
+        throw new Error('날짜와 시간 정보를 인식하지 못했습니다. "4월 28일 저녁 9시" 와 같은 형식으로 말씀해 주세요.');
       }
 
-      // 종료 시간을 시작 시간보다 1시간 뒤로 설정
-      const endDateTime = new Date(eventDateTime.getTime() + 3600000);
-
-      // 시작 시간이 종료 시간보다 늦은지 확인
-      if (eventDateTime >= endDateTime) {
-        throw new Error('종료 시간이 시작 시간보다 빠릅니다.');
-      }
+      console.log('파싱된 일정 정보:', {
+        title: parsedDateTime.title,
+        start: parsedDateTime.start.toLocaleString(),
+        end: parsedDateTime.end.toLocaleString()
+      });
 
       const newEvent = {
-        summary: transcript || '새 일정',
+        summary: parsedDateTime.title || '새 일정',
         description: '', // 설명 필드 추가
         start: {
-          dateTime: eventDateTime.toISOString(), // RFC 3339 형식으로 변환
+          dateTime: toRFC3339(parsedDateTime.start),
           timeZone: 'Asia/Seoul',
         },
         end: {
-          dateTime: endDateTime.toISOString(), // RFC 3339 형식으로 변환
+          dateTime: toRFC3339(parsedDateTime.end),
           timeZone: 'Asia/Seoul',
         },
         reminders: {
@@ -536,8 +509,8 @@ function App() {
       // 확인 모달에 표시할 정보 설정
       setEventToConfirm({
         ...newEvent,
-        id: 'temp_' + Date.now(), // 임시 ID 설정
-        dateTimeSet: dateTimeSet // 날짜가 정상적으로 설정되었는지 여부
+        id: 'temp_' + Date.now(),
+        dateTimeSet: true
       });
       setShowEventConfirmModal(true);
       
