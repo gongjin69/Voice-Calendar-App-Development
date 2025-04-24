@@ -39,6 +39,20 @@ function App() {
   const [showEventConfirmModal, setShowEventConfirmModal] = useState(false);
   const [eventToConfirm, setEventToConfirm] = useState(null);
   const [selectedEvents, setSelectedEvents] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // 음성 녹음 시작 함수
+  const startVoiceRecording = () => {
+    setIsRecording(true);
+    resetTranscript();
+    SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' });
+  };
+
+  // 음성 녹음 중지 함수
+  const stopVoiceRecording = () => {
+    setIsRecording(false);
+    SpeechRecognition.stopListening();
+  };
 
   // 구글 API 초기화
   useEffect(() => {
@@ -362,7 +376,7 @@ function App() {
     }
   }, [userEmail]);
 
-  // 일정 조회 함수 개선 - 현재 날짜부터 향후 1달만 조회
+  // 일정 조회 함수 개선
   const fetchRecentEvents = async () => {
     if (!isSignedIn || !gapiInitialized) return;
     
@@ -409,11 +423,16 @@ function App() {
           console.log(`'${calendar.summary}' 캘린더 일정 조회 결과:`, response.result);
           
           // 응답에서 일정 목록 추출하고 캘린더 정보 추가
-          const eventsWithCalendar = (response.result.items || []).map(event => ({
-            ...event,
-            calendarTitle: calendar.summary,
-            calendarColor: calendar.backgroundColor || '#4285f4'
-          }));
+          const eventsWithCalendar = (response.result.items || [])
+            .filter(event => {
+              const eventStart = new Date(event.start.dateTime || event.start.date);
+              return eventStart >= now; // 현재 시간 이후의 일정만 포함
+            })
+            .map(event => ({
+              ...event,
+              calendarTitle: calendar.summary,
+              calendarColor: calendar.backgroundColor || '#4285f4'
+            }));
           
           allEvents.push(...eventsWithCalendar);
         } catch (error) {
@@ -421,20 +440,16 @@ function App() {
         }
       }
 
-      // 시작 시간 기준으로 정렬 - 가장 가까운 미래 일정이 먼저 오도록
+      // 시작 시간 기준으로 정렬
       allEvents.sort((a, b) => {
         const aTime = new Date(a.start.dateTime || a.start.date);
         const bTime = new Date(b.start.dateTime || b.start.date);
-        return aTime - bTime; // 오름차순 정렬 (과거 → 미래)
+        return aTime - bTime;
       });
 
       console.log('전체 일정 조회 완료, 건수:', allEvents.length);
       setEvents(allEvents);
       
-      // 일정이 없는 경우 사용자에게 알림
-      if (allEvents.length === 0) {
-        console.log('조회된 일정이 없습니다.');
-      }
     } catch (error) {
       console.error('일정 조회 오류:', error.message || error);
       setApiError('일정을 불러오는 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
@@ -509,14 +524,15 @@ function App() {
       // 확인 모달에 표시할 정보 설정
       setEventToConfirm({
         ...newEvent,
+        id: 'temp_' + Date.now(), // 임시 ID 설정
         dateTimeSet: dateTimeSet // 날짜가 정상적으로 설정되었는지 여부
       });
       setShowEventConfirmModal(true);
-      setIsLoading(false);
       
     } catch (error) {
       console.error('일정 생성 준비 오류:', error);
       alert(`일정 등록 준비에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -600,15 +616,18 @@ function App() {
 
   // 일정 확인 모달에서 수정 버튼 클릭 시 호출되는 함수
   const editFromConfirmModal = () => {
-    // 모달 닫기
+    const eventToEdit = eventToConfirm;
     setShowEventConfirmModal(false);
     setEventToConfirm(null);
     
-    // 현재 인식된 텍스트는 유지, 음성 인식 시작
-    SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' });
+    // 음성 인식 시작
+    startVoiceRecording();
+    
+    // 이벤트 ID 설정 (수정을 위해)
+    setEventId(eventToEdit.id);
     
     // 사용자에게 안내
-    alert('음성 인식이 시작되었습니다. 수정할 일정 내용을 말씀해주세요. 완료 후 "일정 추가하기" 버튼을 눌러주세요.');
+    alert('음성 인식이 시작되었습니다. 수정할 일정 내용을 말씀해주세요.');
   };
 
   // 선택된 일정 수정 함수
@@ -644,36 +663,30 @@ function App() {
     alert(`"${eventToEdit.summary}" 일정을 수정합니다. 새로운 일정 내용을 말씀해주세요.`);
     
     // 음성 인식 시작
-    SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' });
+    startVoiceRecording();
     
     // 이벤트 ID 설정
     setEventId(eventId);
   };
 
   // 선택된 일정 삭제 함수
-  const deleteSelectedEvents = async () => {
-    if (selectedEvents.length === 0) {
+  const deleteSelectedEvents = async (eventIds) => {
+    if (!eventIds || eventIds.length === 0) {
       alert('삭제할 일정을 선택해주세요.');
       return;
     }
     
-    const confirmDelete = window.confirm(`선택한 ${selectedEvents.length}개의 일정을 삭제하시겠습니까?`);
+    const confirmDelete = window.confirm(`선택한 ${eventIds.length}개의 일정을 삭제하시겠습니까?`);
     if (!confirmDelete) return;
     
     setIsLoading(true);
     
     try {
-      // 각 선택된 일정 삭제
-      for (const eventId of selectedEvents) {
-        try {
-          await window.gapi.client.calendar.events.delete({
-            calendarId: 'primary',
-            eventId,
-          });
-          console.log(`일정 삭제 성공: ${eventId}`);
-        } catch (error) {
-          console.error(`일정 삭제 실패 (${eventId}):`, error);
-        }
+      for (const eventId of eventIds) {
+        await window.gapi.client.calendar.events.delete({
+          calendarId: 'primary',
+          eventId,
+        });
       }
       
       // 일정 목록 새로고침
@@ -681,6 +694,9 @@ function App() {
       
       // 선택 초기화
       setSelectedEvents([]);
+      setShowEventConfirmModal(false);
+      setEventToConfirm(null);
+      
       alert('선택한 일정이 삭제되었습니다.');
     } catch (error) {
       console.error('일정 삭제 오류:', error);
@@ -693,11 +709,10 @@ function App() {
   // 체크박스 상태 변경 핸들러
   const handleEventCheckboxChange = (eventId) => {
     setSelectedEvents(prev => {
-      if (prev.includes(eventId)) {
-        // 이미 선택된 경우 제거
+      const isSelected = prev.includes(eventId);
+      if (isSelected) {
         return prev.filter(id => id !== eventId);
       } else {
-        // 선택되지 않은 경우 추가
         return [...prev, eventId];
       }
     });
@@ -913,7 +928,6 @@ function App() {
     
     const startDate = new Date(eventToConfirm.start.dateTime);
     const endDate = new Date(eventToConfirm.end.dateTime);
-    const dateTimeSet = eventToConfirm.dateTimeSet; // 날짜가 정상적으로 설정되었는지 여부
     
     return (
       <div className="modal-overlay" style={{
@@ -955,46 +969,55 @@ function App() {
               {endDate.getHours() < 12 ? '오전' : '오후'} {endDate.getHours() % 12 || 12}시
               {endDate.getMinutes() > 0 ? endDate.getMinutes() + '분' : ''}
             </p>
-            
-            {!dateTimeSet && (
-              <div style={{ 
-                marginTop: '10px', 
-                padding: '10px', 
-                backgroundColor: '#fff3cd', 
-                borderRadius: '5px',
-                borderLeft: '3px solid #ffc107'
-              }}>
-                <p style={{ color: '#856404', margin: 0, fontSize: '14px' }}>
-                  <strong>⚠️ 주의:</strong> 음성에서 날짜와 시간을 인식하지 못했습니다. 
-                  현재 날짜와 시간으로 일정이 생성됩니다. 
-                  필요하면 '수정' 버튼을 눌러 일정을 다시 말씀해주세요.
-                </p>
-              </div>
-            )}
           </div>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', gap: '10px' }}>
             <button 
-              onClick={() => setShowEventConfirmModal(false)} 
+              onClick={() => {
+                setShowEventConfirmModal(false);
+                setEventToConfirm(null);
+              }} 
               style={{
-                padding: '10px 15px',
-                backgroundColor: '#ccc',
+                padding: '10px 20px',
+                backgroundColor: '#6c757d',
+                color: 'white',
                 border: 'none',
                 borderRadius: '5px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
               }}
             >
               취소
             </button>
             <button 
-              onClick={editFromConfirmModal}
+              onClick={() => {
+                deleteSelectedEvents([eventToConfirm.id]);
+              }}
               style={{
-                padding: '10px 15px',
-                backgroundColor: '#f39c12',
+                padding: '10px 20px',
+                backgroundColor: '#dc3545',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
+              }}
+            >
+              삭제
+            </button>
+            <button 
+              onClick={editFromConfirmModal}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#ffc107',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
               }}
             >
               수정
@@ -1003,11 +1026,13 @@ function App() {
               onClick={confirmAndCreateEvent}
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#4285f4',
+                backgroundColor: '#28a745',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
               }}
             >
               확인
@@ -1018,128 +1043,317 @@ function App() {
     );
   };
 
-  // 일정 목록 렌더링 함수 개선 - 체크박스 추가
+  // 일정 목록 렌더링
   const renderEventList = () => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // 날짜별로 그룹화
-    const groupedEvents = {};
-    events.forEach(event => {
-      const eventDate = new Date(event.start.dateTime || event.start.date);
-      const dateKey = eventDate.toISOString().split('T')[0];
-      
-      if (!groupedEvents[dateKey]) {
-        groupedEvents[dateKey] = [];
-      }
-      
-      groupedEvents[dateKey].push(event);
-    });
-    
-    // 날짜 키를 시간순으로 정렬 (오늘 → 미래)
-    const sortedDateKeys = Object.keys(groupedEvents).sort((a, b) => {
-      // 오늘은 항상 최상위
-      const aDate = new Date(a);
-      const bDate = new Date(b);
-      const aIsToday = aDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      const bIsToday = bDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      
-      if (aIsToday && !bIsToday) return -1;
-      if (!aIsToday && bIsToday) return 1;
-      
-      // 나머지는 날짜순
-      return aDate - bDate;
-    });
-    
-    // 날짜별 일정 목록 컴포넌트 생성
-    return sortedDateKeys.map(dateKey => {
-      const date = new Date(dateKey);
-      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      
-      return (
-        <div key={dateKey} style={{ 
-          margin: '20px 0',
-          paddingTop: isToday ? '10px' : '0',
-          borderTop: isToday ? '2px solid var(--primary)' : 'none'
-        }}>
-          <h3 style={{ 
-            textAlign: 'left', 
-            color: isToday ? 'var(--primary)' : 'var(--text-primary)',
-            fontWeight: isToday ? 'bold' : 'normal',
-            backgroundColor: isToday ? 'rgba(66, 133, 244, 0.1)' : 'transparent',
-            padding: isToday ? '8px' : '4px',
-            borderRadius: '5px'
+    return (
+      <div className="events-container" style={{ 
+        maxHeight: '400px', 
+        overflowY: 'auto',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '10px'
+      }}>
+        {events.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '40px 20px',
+            color: '#6c757d'
           }}>
-            {date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일
-            {isToday ? ' (오늘)' : ''}
-          </h3>
-          
-          {groupedEvents[dateKey].map((event) => (
+            {isLoading ? '일정을 불러오는 중...' : '등록된 일정이 없습니다.'}
+          </div>
+        ) : (
+          events.map((event) => (
             <div 
               key={event.id} 
-              className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
+              className={`event-item ${selectedEvents.includes(event.id) ? 'selected-event' : ''}`}
               style={{
-                borderLeftColor: event.calendarColor || 'var(--primary)',
-                padding: '10px',
-                marginBottom: '10px',
-                borderRadius: '5px',
-                border: '1px solid #eee',
-                borderLeft: `4px solid ${event.calendarColor || 'var(--primary)'}`,
+                padding: '15px',
+                marginBottom: '15px',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 display: 'flex',
-                flexDirection: 'column',
-                position: 'relative'
+                alignItems: 'flex-start',
+                gap: '15px',
+                transition: 'all 0.2s ease',
+                border: selectedEvents.includes(event.id) ? '2px solid #4285f4' : '1px solid #eee'
               }}
             >
               <div style={{ 
                 display: 'flex', 
-                alignItems: 'flex-start',
-                marginBottom: '5px'
+                alignItems: 'center',
+                padding: '8px'
               }}>
                 <input 
                   type="checkbox" 
                   checked={selectedEvents.includes(event.id)}
                   onChange={() => handleEventCheckboxChange(event.id)}
                   style={{ 
-                    marginRight: '10px',
-                    transform: 'scale(1.2)',
-                    cursor: 'pointer'
+                    width: '20px',
+                    height: '20px',
+                    cursor: 'pointer',
+                    accentColor: '#4285f4'
                   }}
                 />
-                <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'flex-start',
-                    gap: '8px'
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <h3 style={{ 
+                    margin: 0, 
+                    color: '#333',
+                    fontSize: '16px',
+                    fontWeight: '600'
                   }}>
-                    <h3 style={{ margin: '0 0 8px 0' }}>{event.summary}</h3>
-                    <span className="calendar-tag" style={{ 
-                      backgroundColor: event.calendarColor,
-                      fontSize: '12px',
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      color: 'white'
-                    }}>
-                      {event.calendarTitle}
-                    </span>
-                  </div>
-                  <p className="event-time" style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#666' }}>
-                    🕒 {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    {' - '}
-                    {new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </p>
-                  {event.description && (
-                    <p className="event-detail" style={{ margin: '0', fontSize: '14px', color: '#666' }}>
-                      {event.description}
-                    </p>
-                  )}
+                    {event.summary}
+                  </h3>
+                  <span style={{ 
+                    backgroundColor: event.calendarColor || '#4285f4',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {event.calendarTitle}
+                  </span>
+                </div>
+                <div style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#666',
+                  fontSize: '14px'
+                }}>
+                  <span role="img" aria-label="calendar">📅</span>
+                  {new Date(event.start.dateTime || event.start.date).toLocaleString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    weekday: 'short'
+                  })}
+                </div>
+                <div style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#666',
+                  fontSize: '14px',
+                  marginTop: '4px'
+                }}>
+                  <span role="img" aria-label="time">🕒</span>
+                  {new Date(event.start.dateTime || event.start.date).toLocaleString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                  {' ~ '}
+                  {new Date(event.end.dateTime || event.end.date).toLocaleString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
                 </div>
               </div>
             </div>
-          ))}
+          ))
+        )}
+      </div>
+    );
+  };
+
+  // 음성 녹음 컨트롤 렌더링
+  const renderVoiceControls = () => {
+    return (
+      <div className="voice-control-section" style={{
+        backgroundColor: 'white',
+        padding: '20px',
+        borderRadius: '10px',
+        marginBottom: '20px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          marginBottom: '15px',
+          gap: '10px'
+        }}>
+          <h2 style={{ margin: 0, color: '#333' }}>음성 인식</h2>
+          <span style={{ 
+            backgroundColor: listening ? '#28a745' : '#dc3545',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '12px',
+            fontSize: '12px'
+          }}>
+            {listening ? '녹음 중' : '대기 중'}
+          </span>
         </div>
-      );
-    });
+
+        <div style={{ 
+          display: 'flex', 
+          gap: '10px', 
+          marginBottom: '20px'
+        }}>
+          <button 
+            onClick={startVoiceRecording}
+            disabled={listening}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: listening ? '#6c757d' : '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: listening ? 'not-allowed' : 'pointer',
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span role="img" aria-label="microphone">🎤</span>
+            녹음 시작
+          </button>
+          <button 
+            onClick={stopVoiceRecording}
+            disabled={!listening}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: !listening ? '#6c757d' : '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: !listening ? 'not-allowed' : 'pointer',
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span role="img" aria-label="stop">⏹️</span>
+            녹음 중지
+          </button>
+          <button 
+            onClick={resetTranscript}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#17a2b8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span role="img" aria-label="reset">🔄</span>
+            초기화
+          </button>
+        </div>
+
+        <div style={{
+          backgroundColor: '#f8f9fa',
+          padding: '15px',
+          borderRadius: '5px',
+          marginBottom: '20px'
+        }}>
+          <h3 style={{ 
+            margin: '0 0 10px 0',
+            color: '#333',
+            fontSize: '14px'
+          }}>
+            인식된 내용
+          </h3>
+          <p style={{ 
+            margin: 0,
+            color: '#666',
+            minHeight: '50px',
+            whiteSpace: 'pre-wrap'
+          }}>
+            {transcript || '음성을 인식하지 못했습니다. 다시 시도해주세요.'}
+          </p>
+        </div>
+
+        <div style={{ 
+          display: 'flex', 
+          gap: '10px'
+        }}>
+          <button 
+            onClick={createEvent}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#4285f4',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              flex: 1,
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <span role="img" aria-label="calendar">📅</span>
+            일정 추가하기
+          </button>
+          {selectedEvents.length > 0 && (
+            <>
+              <button 
+                onClick={() => editSelectedEvent()}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#ffc107',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  flex: 1,
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span role="img" aria-label="edit">✏️</span>
+                일정 수정하기
+              </button>
+              <button 
+                onClick={() => deleteSelectedEvents(selectedEvents)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  flex: 1,
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span role="img" aria-label="delete">🗑️</span>
+                일정 삭제하기
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // 관리자 여부 확인
@@ -1204,33 +1418,23 @@ function App() {
         textAlign: 'center',
         marginBottom: '20px'
       }}>
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ 
+          marginBottom: '40px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
           <img 
-            src="/ewc-voice-logo.png" 
-            alt="EWC KIDS" 
+            src="/ewc-kids-logo.png" 
+            alt="EWC VOICE Calendar" 
             style={{ 
-              height: '140px',
-              marginBottom: '20px',
-              maxWidth: '100%',
+              height: 'auto',
+              maxWidth: '300px',
+              width: '100%',
               objectFit: 'contain'
             }} 
           />
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            gap: '10px'
-          }}>
-            <img 
-              src="/voice-smile.svg" 
-              alt="VOICE 구글캘린더" 
-              style={{ 
-                height: '60px',
-                maxWidth: '100%',
-                objectFit: 'contain'
-              }} 
-            />
-          </div>
         </div>
 
         {renderLoginButton()}
@@ -1242,65 +1446,7 @@ function App() {
             ) : (
               isApproved ? (
                 <div style={{ padding: '0 20px' }}>
-                  <div className="voice-control-section">
-                    <h2 style={{ marginBottom: '20px', color: '#333' }}>음성 인식</h2>
-                    <p style={{ 
-                      marginBottom: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      color: listening ? 'var(--secondary-color)' : '#666'
-                    }}>
-                      🎧 음성 인식 상태: {listening ? '켜짐' : '꺼짐'}
-                    </p>
-                    <div className="voice-buttons">
-                      <button 
-                        onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' })}
-                        className="start-button"
-                      >
-                        🎙️ 음성 인식 시작
-                      </button>
-                      <button 
-                        onClick={SpeechRecognition.stopListening}
-                        className="stop-button"
-                      >
-                        🛑 음성 인식 중지
-                      </button>
-                      <button 
-                        onClick={resetTranscript}
-                        className="reset-button"
-                      >
-                        🔄 텍스트 초기화
-                      </button>
-                    </div>
-
-                    <div className="transcript-box">
-                      <h3 style={{ marginBottom: '10px', color: '#333' }}>📝 인식된 내용</h3>
-                      <p style={{ color: '#666' }}>{transcript}</p>
-                    </div>
-
-                    <div className="event-controls">
-                      <button 
-                        onClick={createEvent}
-                        style={{ backgroundColor: 'var(--secondary-color)', color: 'white' }}
-                      >
-                        📅 일정 추가하기
-                      </button>
-                      <button 
-                        onClick={editSelectedEvent}
-                        style={{ backgroundColor: 'var(--warning-color)', color: 'white' }}
-                      >
-                        ✏️ 일정 수정하기
-                      </button>
-                      <button 
-                        onClick={deleteSelectedEvents}
-                        style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}
-                      >
-                        🗑️ 일정 삭제하기
-                      </button>
-                    </div>
-                  </div>
-
+                  {renderVoiceControls()}
                   <div className="event-list">
                     <div style={{ 
                       display: 'flex', 
@@ -1308,34 +1454,27 @@ function App() {
                       alignItems: 'center',
                       marginBottom: '20px'
                     }}>
-                      <h2 style={{ color: '#333' }}>📅 내 일정 목록</h2>
+                      <h2 style={{ color: '#333' }}>내 일정 목록</h2>
                       <button 
                         onClick={fetchRecentEvents}
-                        className="refresh-button"
                         style={{ 
-                          width: 'auto', 
                           padding: '8px 16px',
-                          marginTop: 0 
+                          backgroundColor: '#6c757d',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '5px',
+                          cursor: isLoading ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}
                         disabled={isLoading}
                       >
-                        {isLoading ? '불러오는 중...' : '🔄 새로고침'}
+                        <span role="img" aria-label="refresh">🔄</span>
+                        {isLoading ? '불러오는 중...' : '새로고침'}
                       </button>
                     </div>
-                    
-                    <div className="events-container" style={{ 
-                      maxHeight: '400px', 
-                      overflowY: 'auto',
-                      padding: '10px'
-                    }}>
-                      {events.length > 0 ? (
-                        renderEventList()
-                      ) : (
-                        <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-                          {isLoading ? '일정을 불러오는 중...' : '등록된 일정이 없습니다.'}
-                        </p>
-                      )}
-                    </div>
+                    {renderEventList()}
                   </div>
                 </div>
               ) : (
