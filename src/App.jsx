@@ -36,6 +36,9 @@ function App() {
   const [gisInitialized, setGisInitialized] = useState(false);
   const [tokenClient, setTokenClient] = useState(null);
   const [apiError, setApiError] = useState(null);
+  const [showEventConfirmModal, setShowEventConfirmModal] = useState(false);
+  const [eventToConfirm, setEventToConfirm] = useState(null);
+  const [selectedEvents, setSelectedEvents] = useState([]);
 
   // 구글 API 초기화
   useEffect(() => {
@@ -478,7 +481,7 @@ function App() {
 
       const endDateTime = new Date(eventDateTime.getTime() + 3600000); // 1시간 후
 
-      const event = {
+      const newEvent = {
         summary: transcript || '새 일정',
         start: {
           dateTime: eventDateTime.toISOString(),
@@ -497,7 +500,24 @@ function App() {
         },
       };
 
-      console.log('일정 생성 시도:', event);
+      // 확인 모달 표시하기 위해 이벤트 정보 설정
+      setEventToConfirm(newEvent);
+      setShowEventConfirmModal(true);
+      setIsLoading(false);
+      
+    } catch (error) {
+      console.error('일정 생성 준비 오류:', error);
+      alert(`일정 등록 준비에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+      setIsLoading(false);
+    }
+  };
+
+  // 일정 확인 모달에서 확인 버튼 클릭 시 호출되는 함수
+  const confirmAndCreateEvent = async () => {
+    if (!isSignedIn || !eventToConfirm) return;
+    
+    try {
+      setIsLoading(true);
       
       // 구글 API 클라이언트 상태 확인
       if (!window.gapi || !window.gapi.client || !window.gapi.client.calendar) {
@@ -517,12 +537,16 @@ function App() {
       // 일정 생성 요청 전송
       const response = await window.gapi.client.calendar.events.insert({
         calendarId: 'primary', // 기본 캘린더에 일정 추가
-        resource: event,
+        resource: eventToConfirm,
       });
 
       if (response && response.result && response.result.id) {
         console.log('일정 생성 성공:', response.result);
         setEventId(response.result.id);
+        
+        // 모달 닫기
+        setShowEventConfirmModal(false);
+        setEventToConfirm(null);
         
         // 날짜와 시간 정보를 포함한 알림 메시지
         const eventDate = new Date(response.result.start.dateTime);
@@ -560,48 +584,112 @@ function App() {
     }
   };
 
-  const updateEvent = async () => {
-    if (!isSignedIn || !eventId) {
-      alert('수정할 일정이 없습니다.');
-      return;
-    }
-
-    try {
-      await window.gapi.client.calendar.events.patch({
-        calendarId: 'primary',
-        eventId,
-        resource: {
-          summary: transcript || '수정된 일정',
-        },
-      });
-      alert('✏️ 일정이 수정되었습니다.');
-      await fetchRecentEvents();
-    } catch (error) {
-      console.error('일정 수정 오류:', error);
-      alert('일정 수정에 실패했습니다.');
-    }
+  // 일정 확인 모달에서 수정 버튼 클릭 시 호출되는 함수
+  const editFromConfirmModal = () => {
+    // 모달 닫기
+    setShowEventConfirmModal(false);
+    setEventToConfirm(null);
+    
+    // 현재 인식된 텍스트는 유지, 음성 인식 시작
+    SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' });
+    
+    // 사용자에게 안내
+    alert('음성 인식이 시작되었습니다. 수정할 일정 내용을 말씀해주세요. 완료 후 "일정 추가하기" 버튼을 눌러주세요.');
   };
 
-  const deleteEvent = async () => {
-    if (!isSignedIn || !eventId) {
-      alert('삭제할 일정이 없습니다.');
+  // 선택된 일정 수정 함수
+  const editSelectedEvent = async () => {
+    // 선택된 일정이 없는 경우
+    if (selectedEvents.length === 0) {
+      alert('수정할 일정을 선택해주세요.');
       return;
     }
+    
+    // 여러 일정이 선택된 경우
+    if (selectedEvents.length > 1) {
+      alert('한 번에 하나의 일정만 수정할 수 있습니다.');
+      return;
+    }
+    
+    // 선택된 일정 ID로 이벤트 찾기
+    const eventId = selectedEvents[0];
+    const eventToEdit = events.find(e => e.id === eventId);
+    
+    if (!eventToEdit) {
+      alert('선택한 일정을 찾을 수 없습니다.');
+      return;
+    }
+    
+    // 현재 선택된 일정 정보를 transcript에 설정
+    resetTranscript();
+    const eventDate = new Date(eventToEdit.start.dateTime || eventToEdit.start.date);
+    const ampm = eventDate.getHours() >= 12 ? '오후' : '오전';
+    const hour = eventDate.getHours() % 12 || 12;
+    
+    // 음성 인식을 위한 안내
+    alert(`"${eventToEdit.summary}" 일정을 수정합니다. 새로운 일정 내용을 말씀해주세요.`);
+    
+    // 음성 인식 시작
+    SpeechRecognition.startListening({ continuous: true, language: 'ko-KR' });
+    
+    // 이벤트 ID 설정
+    setEventId(eventId);
+  };
 
+  // 선택된 일정 삭제 함수
+  const deleteSelectedEvents = async () => {
+    if (selectedEvents.length === 0) {
+      alert('삭제할 일정을 선택해주세요.');
+      return;
+    }
+    
+    const confirmDelete = window.confirm(`선택한 ${selectedEvents.length}개의 일정을 삭제하시겠습니까?`);
+    if (!confirmDelete) return;
+    
+    setIsLoading(true);
+    
     try {
-      await window.gapi.client.calendar.events.delete({
-        calendarId: 'primary',
-        eventId,
-      });
-      setEventId(null);
-      alert('🗑️ 일정이 삭제되었습니다.');
+      // 각 선택된 일정 삭제
+      for (const eventId of selectedEvents) {
+        try {
+          await window.gapi.client.calendar.events.delete({
+            calendarId: 'primary',
+            eventId,
+          });
+          console.log(`일정 삭제 성공: ${eventId}`);
+        } catch (error) {
+          console.error(`일정 삭제 실패 (${eventId}):`, error);
+        }
+      }
+      
+      // 일정 목록 새로고침
       await fetchRecentEvents();
+      
+      // 선택 초기화
+      setSelectedEvents([]);
+      alert('선택한 일정이 삭제되었습니다.');
     } catch (error) {
       console.error('일정 삭제 오류:', error);
-      alert('일정 삭제에 실패했습니다.');
+      alert('일정 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  // 체크박스 상태 변경 핸들러
+  const handleEventCheckboxChange = (eventId) => {
+    setSelectedEvents(prev => {
+      if (prev.includes(eventId)) {
+        // 이미 선택된 경우 제거
+        return prev.filter(id => id !== eventId);
+      } else {
+        // 선택되지 않은 경우 추가
+        return [...prev, eventId];
+      }
+    });
+  };
+
+  // 승인 상태 확인
   const checkApprovalStatus = async () => {
     try {
       // 관리자 계정인 경우 자동으로 승인 처리
@@ -636,6 +724,7 @@ function App() {
     }
   };
 
+  // 접근 권한 요청
   const requestAccess = async () => {
     try {
       // 로딩 표시
@@ -693,100 +782,6 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // 관리자 여부 확인
-  const isAdmin = userEmail && ADMIN_EMAILS.includes(userEmail);
-
-  // 일정 목록 렌더링 함수 개선 - 현재일이 가장 먼저 표시되도록
-  const renderEventList = () => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // 날짜별로 그룹화
-    const groupedEvents = {};
-    events.forEach(event => {
-      const eventDate = new Date(event.start.dateTime || event.start.date);
-      const dateKey = eventDate.toISOString().split('T')[0];
-      
-      if (!groupedEvents[dateKey]) {
-        groupedEvents[dateKey] = [];
-      }
-      
-      groupedEvents[dateKey].push(event);
-    });
-    
-    // 날짜 키를 시간순으로 정렬 (오늘 → 미래)
-    const sortedDateKeys = Object.keys(groupedEvents).sort((a, b) => {
-      // 오늘은 항상 최상위
-      const aDate = new Date(a);
-      const bDate = new Date(b);
-      const aIsToday = aDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      const bIsToday = bDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      
-      if (aIsToday && !bIsToday) return -1;
-      if (!aIsToday && bIsToday) return 1;
-      
-      // 나머지는 날짜순
-      return aDate - bDate;
-    });
-    
-    // 날짜별 일정 목록 컴포넌트 생성
-    return sortedDateKeys.map(dateKey => {
-      const date = new Date(dateKey);
-      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
-      
-      return (
-        <div key={dateKey} style={{ 
-          margin: '20px 0',
-          paddingTop: isToday ? '10px' : '0',
-          borderTop: isToday ? '2px solid var(--primary)' : 'none'
-        }}>
-          <h3 style={{ 
-            textAlign: 'left', 
-            color: isToday ? 'var(--primary)' : 'var(--text-primary)',
-            fontWeight: isToday ? 'bold' : 'normal',
-            backgroundColor: isToday ? 'rgba(66, 133, 244, 0.1)' : 'transparent',
-            padding: isToday ? '8px' : '4px',
-            borderRadius: '5px'
-          }}>
-            {date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일
-            {isToday ? ' (오늘)' : ''}
-          </h3>
-          
-          {groupedEvents[dateKey].map((event) => (
-            <div 
-              key={event.id} 
-              className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
-              onClick={() => setEventId(event.id)}
-              style={{
-                borderLeftColor: event.calendarColor || 'var(--primary)',
-              }}
-            >
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'flex-start',
-                gap: '8px'
-              }}>
-                <h3>{event.summary}</h3>
-                <span className="calendar-tag" style={{ backgroundColor: event.calendarColor }}>
-                  {event.calendarTitle}
-                </span>
-              </div>
-              <p className="event-time">
-                🕒 {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                {' - '}
-                {new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-              </p>
-              <p className="event-detail">
-                {event.description ? event.description : '세부 내용 없음'}
-              </p>
-            </div>
-          ))}
-        </div>
-      );
-    });
   };
 
   // 접근 권한이 없는 경우 표시할 컴포넌트 (UI 개선)
@@ -897,6 +892,223 @@ function App() {
       </div>
     </div>
   );
+
+  // 일정 확인 모달 렌더링
+  const renderEventConfirmModal = () => {
+    if (!showEventConfirmModal || !eventToConfirm) return null;
+    
+    const startDate = new Date(eventToConfirm.start.dateTime);
+    const endDate = new Date(eventToConfirm.end.dateTime);
+    
+    return (
+      <div className="modal-overlay" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000
+      }}>
+        <div className="modal-content" style={{
+          width: '90%',
+          maxWidth: '500px',
+          backgroundColor: 'white',
+          borderRadius: '10px',
+          padding: '20px',
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)'
+        }}>
+          <h2 style={{ color: '#333', marginBottom: '20px' }}>일정 확인</h2>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ color: '#555' }}>일정 제목</h3>
+            <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{eventToConfirm.summary}</p>
+          </div>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ color: '#555' }}>일정 시간</h3>
+            <p style={{ fontSize: '16px' }}>
+              {startDate.getFullYear()}년 {startDate.getMonth() + 1}월 {startDate.getDate()}일
+            </p>
+            <p style={{ fontSize: '16px' }}>
+              {startDate.getHours()}시 {startDate.getMinutes()}분 ~ {endDate.getHours()}시 {endDate.getMinutes()}분
+            </p>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
+            <button 
+              onClick={() => setShowEventConfirmModal(false)} 
+              style={{
+                padding: '10px 15px',
+                backgroundColor: '#ccc',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              취소
+            </button>
+            <button 
+              onClick={editFromConfirmModal}
+              style={{
+                padding: '10px 15px',
+                backgroundColor: '#f39c12',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              수정
+            </button>
+            <button 
+              onClick={confirmAndCreateEvent}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#4285f4',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 일정 목록 렌더링 함수 개선 - 체크박스 추가
+  const renderEventList = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // 날짜별로 그룹화
+    const groupedEvents = {};
+    events.forEach(event => {
+      const eventDate = new Date(event.start.dateTime || event.start.date);
+      const dateKey = eventDate.toISOString().split('T')[0];
+      
+      if (!groupedEvents[dateKey]) {
+        groupedEvents[dateKey] = [];
+      }
+      
+      groupedEvents[dateKey].push(event);
+    });
+    
+    // 날짜 키를 시간순으로 정렬 (오늘 → 미래)
+    const sortedDateKeys = Object.keys(groupedEvents).sort((a, b) => {
+      // 오늘은 항상 최상위
+      const aDate = new Date(a);
+      const bDate = new Date(b);
+      const aIsToday = aDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      const bIsToday = bDate.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      
+      if (aIsToday && !bIsToday) return -1;
+      if (!aIsToday && bIsToday) return 1;
+      
+      // 나머지는 날짜순
+      return aDate - bDate;
+    });
+    
+    // 날짜별 일정 목록 컴포넌트 생성
+    return sortedDateKeys.map(dateKey => {
+      const date = new Date(dateKey);
+      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      
+      return (
+        <div key={dateKey} style={{ 
+          margin: '20px 0',
+          paddingTop: isToday ? '10px' : '0',
+          borderTop: isToday ? '2px solid var(--primary)' : 'none'
+        }}>
+          <h3 style={{ 
+            textAlign: 'left', 
+            color: isToday ? 'var(--primary)' : 'var(--text-primary)',
+            fontWeight: isToday ? 'bold' : 'normal',
+            backgroundColor: isToday ? 'rgba(66, 133, 244, 0.1)' : 'transparent',
+            padding: isToday ? '8px' : '4px',
+            borderRadius: '5px'
+          }}>
+            {date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일
+            {isToday ? ' (오늘)' : ''}
+          </h3>
+          
+          {groupedEvents[dateKey].map((event) => (
+            <div 
+              key={event.id} 
+              className={`event-item ${eventId === event.id ? 'selected-event' : ''}`}
+              style={{
+                borderLeftColor: event.calendarColor || 'var(--primary)',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '5px',
+                border: '1px solid #eee',
+                borderLeft: `4px solid ${event.calendarColor || 'var(--primary)'}`,
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative'
+              }}
+            >
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'flex-start',
+                marginBottom: '5px'
+              }}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedEvents.includes(event.id)}
+                  onChange={() => handleEventCheckboxChange(event.id)}
+                  style={{ 
+                    marginRight: '10px',
+                    transform: 'scale(1.2)',
+                    cursor: 'pointer'
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'flex-start',
+                    gap: '8px'
+                  }}>
+                    <h3 style={{ margin: '0 0 8px 0' }}>{event.summary}</h3>
+                    <span className="calendar-tag" style={{ 
+                      backgroundColor: event.calendarColor,
+                      fontSize: '12px',
+                      padding: '2px 5px',
+                      borderRadius: '3px',
+                      color: 'white'
+                    }}>
+                      {event.calendarTitle}
+                    </span>
+                  </div>
+                  <p className="event-time" style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#666' }}>
+                    🕒 {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    {' - '}
+                    {new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </p>
+                  {event.description && (
+                    <p className="event-detail" style={{ margin: '0', fontSize: '14px', color: '#666' }}>
+                      {event.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    });
+  };
+
+  // 관리자 여부 확인
+  const isAdmin = userEmail && ADMIN_EMAILS.includes(userEmail);
 
   if (!browserSupportsSpeechRecognition) {
     return (
@@ -1040,13 +1252,13 @@ function App() {
                         📅 일정 추가하기
                       </button>
                       <button 
-                        onClick={updateEvent}
+                        onClick={editSelectedEvent}
                         style={{ backgroundColor: 'var(--warning-color)', color: 'white' }}
                       >
                         ✏️ 일정 수정하기
                       </button>
                       <button 
-                        onClick={deleteEvent}
+                        onClick={deleteSelectedEvents}
                         style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}
                       >
                         🗑️ 일정 삭제하기
@@ -1098,8 +1310,10 @@ function App() {
           </>
         )}
       </div>
+      {renderEventConfirmModal()}
     </div>
   );
 }
 
 export default App;
+
