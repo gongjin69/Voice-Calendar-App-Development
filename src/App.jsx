@@ -541,17 +541,28 @@ function App() {
 
       // 실제 등록할 이벤트 객체 생성 (dateTimeSet 속성 제거)
       const { dateTimeSet, id, ...eventToCreate } = eventToConfirm;
-      
-      console.log('일정 생성 요청:', eventToCreate);
 
-      // 일정 생성 요청 전송
-      const response = await window.gapi.client.calendar.events.insert({
-        calendarId: 'primary',
-        resource: eventToCreate,
-      });
+      let response;
+      
+      // eventId가 있으면 수정, 없으면 새로 생성
+      if (eventId) {
+        console.log('일정 수정 요청:', eventId, eventToCreate);
+        response = await window.gapi.client.calendar.events.update({
+          calendarId: 'primary',
+          eventId: eventId,
+          resource: eventToCreate,
+          sendUpdates: 'all', // 참석자에게 알림 전송
+        });
+      } else {
+        console.log('일정 생성 요청:', eventToCreate);
+        response = await window.gapi.client.calendar.events.insert({
+          calendarId: 'primary',
+          resource: eventToCreate,
+        });
+      }
 
       if (response && response.result && response.result.id) {
-        console.log('일정 생성 성공:', response.result);
+        console.log('일정 처리 성공:', response.result);
         setEventId(response.result.id);
         
         // 모달 닫기
@@ -562,32 +573,45 @@ function App() {
         const eventDate = new Date(response.result.start.dateTime);
         const formattedDate = `${eventDate.getFullYear()}년 ${eventDate.getMonth() + 1}월 ${eventDate.getDate()}일 ${eventDate.getHours()}시`;
         
-        alert(`✅ 일정이 등록되었습니다! (${formattedDate})\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
+        // 수정 또는 생성 메시지
+        const actionMsg = eventId ? '수정' : '등록';
+        alert(`✅ 일정이 ${actionMsg}되었습니다! (${formattedDate})\n기본 알림이 설정되었습니다:\n- 24시간 전 이메일\n- 30분 전 팝업 알림`);
         
-        // 새로 생성된 일정을 즉시 목록에 추가
-        setEvents(prevEvents => {
-          const newEvent = {
+        // 이벤트 목록 업데이트
+        if (eventId) {
+          setEvents(prevEvents => 
+            prevEvents.map(ev => 
+              ev.id === eventId 
+                ? { ...response.result, calendarTitle: ev.calendarTitle, calendarColor: ev.calendarColor }
+                : ev
+            )
+          );
+        } else {
+          setEvents(prevEvents => [{
             ...response.result,
             calendarTitle: '내 캘린더',
             calendarColor: '#4285f4'
-          };
-          return [newEvent, ...prevEvents];
-        });
+          }, ...prevEvents]);
+        }
+        
+        // 선택 초기화
+        setSelectedEvents([]);
+        setEventId(null);
         
         // 전체 일정 목록 새로고침
         await fetchRecentEvents();
       } else {
-        throw new Error('일정 생성 응답에 ID가 없습니다.');
+        throw new Error('일정 처리 응답에 ID가 없습니다.');
       }
     } catch (error) {
-      console.error('일정 등록 오류:', error);
+      console.error('일정 처리 오류:', error);
       
       // 상세 오류 정보 로깅
       if (error.result && error.result.error) {
         console.error('API 오류 상세:', error.result.error);
       }
       
-      let errorMessage = '일정 등록에 실패했습니다: ';
+      let errorMessage = `일정 ${eventId ? '수정' : '등록'}에 실패했습니다: `;
       if (error.result && error.result.error && error.result.error.message) {
         errorMessage += error.result.error.message;
       } else {
@@ -642,8 +666,6 @@ function App() {
     // 현재 선택된 일정 정보를 transcript에 설정
     resetTranscript();
     const eventDate = new Date(eventToEdit.start.dateTime || eventToEdit.start.date);
-    const ampm = eventDate.getHours() >= 12 ? '오후' : '오전';
-    const hour = eventDate.getHours() % 12 || 12;
     
     // 음성 인식을 위한 안내
     alert(`"${eventToEdit.summary}" 일정을 수정합니다. 새로운 일정 내용을 말씀해주세요.`);
