@@ -17,7 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // DB 업데이트
-    await db.collection('users').updateMany(
+    const database = await db;
+    await database.collection('users').updateMany(
       { email: { $in: emails } },
       { $set: { isApproved: true, updatedAt: new Date() } }
     );

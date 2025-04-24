@@ -17,7 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Soft Delete - deleted 플래그만 설정
-    await db.collection('users').updateMany(
+    const database = await db;
+    await database.collection('users').updateMany(
       { email: { $in: emails } },
       { 
         $set: { 

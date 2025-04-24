@@ -96,13 +96,11 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      const response = await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
+      const response = await axios.post('/api/admin/users/approve-many', {
         emails: Array.from(selected)
       });
 
       if (response.status === 200) {
-        // UI 업데이트
         setUsers(prevUsers => 
           prevUsers.map(user => 
             selected.has(user.email) 
@@ -130,13 +128,11 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      const response = await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
+      const response = await axios.post('/api/admin/users/delete-many', {
         emails: Array.from(selected)
       });
 
       if (response.status === 200) {
-        // UI 업데이트
         setUsers(prevUsers => 
           prevUsers.map(user => 
             selected.has(user.email) 
