@@ -1,16 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../../lib/db';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { db } from '../lib/db';
 
-export async function POST(req: NextRequest) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'POST 메서드만 허용됩니다.' });
+  }
+
   try {
-    const { emails } = await req.json() as { emails: string[] };
+    const { emails } = req.body as { emails: string[] };
     
     // 요청 데이터 검증
     if (!Array.isArray(emails) || !emails.length) {
-      return NextResponse.json(
-        { message: '유효한 이메일 배열이 필요합니다.' },
-        { status: 400 }
-      );
+      return res.status(400).json({ message: '유효한 이메일 배열이 필요합니다.' });
     }
 
     // Soft Delete - deleted 플래그만 설정
@@ -26,16 +27,15 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    return NextResponse.json({ 
+    return res.status(200).json({ 
       ok: true, 
       count: emails.length,
       message: `${emails.length}명의 사용자가 삭제되었습니다.`
     });
   } catch (error) {
     console.error('일괄 삭제 처리 중 오류:', error);
-    return NextResponse.json(
-      { message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' },
-      { status: 500 }
-    );
+    return res.status(500).json({ 
+      message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' 
+    });
   }
 } 
