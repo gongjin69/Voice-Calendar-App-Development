@@ -15,7 +15,32 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server/index.js"
+      "dest": "/server/index.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept",
+        "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+        "Cross-Origin-Embedder-Policy": "require-corp"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept",
+        "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+        "Cross-Origin-Embedder-Policy": "require-corp"
+      },
+      "continue": true
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 } 
