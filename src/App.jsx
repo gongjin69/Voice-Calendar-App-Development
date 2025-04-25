@@ -353,7 +353,7 @@ function App() {
         
         console.log('서버 연결 응답:', response.data);
         // 응답이 올바른지 확인
-        if (response.data && response.data.status === 'healthy') {
+        if (response.data && (response.data.ok === true || response.data.status === 'ok')) {
           setIsServerConnected(true);
         } else {
           setIsServerConnected(false);

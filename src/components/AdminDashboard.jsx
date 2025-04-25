@@ -96,7 +96,9 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const response = await axios.post('/api/admin/users/approve-many', {
+      console.log('일괄 승인 시작, 선택된 이메일:', Array.from(selected));
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      const response = await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
         emails: Array.from(selected)
       });
 
@@ -128,7 +130,9 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const response = await axios.post('/api/admin/users/delete-many', {
+      console.log('일괄 삭제 시작, 선택된 이메일:', Array.from(selected));
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
+      const response = await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
         emails: Array.from(selected)
       });
 
