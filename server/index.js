@@ -192,6 +192,67 @@ app.post('/api/access-requests/:id/approve', checkAdmin, async (req, res) => {
   }
 });
 
+// 일괄 승인 API
+app.post('/api/admin/users/approve-many', checkAdmin, async (req, res) => {
+  const { emails } = req.body;
+  
+  if (!Array.isArray(emails) || !emails.length) {
+    return res.status(400).json({ message: '유효한 이메일 배열이 필요합니다.' });
+  }
+
+  try {
+    await prisma.user.updateMany({
+      where: { email: { in: emails } },
+      data: { 
+        isApproved: true,
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({ 
+      ok: true, 
+      count: emails.length,
+      message: `${emails.length}명의 사용자가 승인되었습니다.`
+    });
+  } catch (error) {
+    console.error('일괄 승인 처리 중 오류:', error);
+    res.status(500).json({ 
+      message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' 
+    });
+  }
+});
+
+// 일괄 삭제 API
+app.post('/api/admin/users/delete-many', checkAdmin, async (req, res) => {
+  const { emails } = req.body;
+  
+  if (!Array.isArray(emails) || !emails.length) {
+    return res.status(400).json({ message: '유효한 이메일 배열이 필요합니다.' });
+  }
+
+  try {
+    await prisma.user.updateMany({
+      where: { email: { in: emails } },
+      data: { 
+        deleted: true,
+        deletedAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({ 
+      ok: true, 
+      count: emails.length,
+      message: `${emails.length}명의 사용자가 삭제되었습니다.`
+    });
+  } catch (error) {
+    console.error('일괄 삭제 처리 중 오류:', error);
+    res.status(500).json({ 
+      message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' 
+    });
+  }
+});
+
 // SPA를 위한 catch-all
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
