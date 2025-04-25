@@ -23,12 +23,7 @@ const checkAdmin = (req, res, next) => {
 
 // 헬스 체크
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
-  });
+  res.json({ status: 'ok', timestamp: Date.now() });
 });
 
 // 사용자 승인 상태 확인
