@@ -4,8 +4,6 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import adminRoutes from '../server/routes/admin.js';
-import emailRoutes from '../server/routes/email.js';
 
 dotenv.config();
 
@@ -25,8 +23,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-// 정적 파일 제공
-app.use(express.static(distPath));
 
 // 관리자 이메일 목록
 const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
@@ -40,32 +36,15 @@ const checkAdmin = (req, res, next) => {
   next();
 };
 
-// 헬스 체크 - 강화된 버전
+// 헬스 체크
 app.get('/health', (req, res) => {
-  // CORS 헤더 직접 설정
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  
-  try {
-    res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      version: '1.0.0'
-    });
-  } catch (error) {
-    console.error('Health check error:', error);
-    res.status(500).json({
-      status: 'unhealthy',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
 });
-
-// 관리자 및 이메일 API 라우트 (/api 제거)
-app.use('/admin', adminRoutes);
-app.use('/email', emailRoutes);
 
 // 사용자 승인 상태 확인
 app.get('/users/approval-status/:email', async (req, res) => {
@@ -163,7 +142,6 @@ app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
       return res.status(404).json({ error: '요청을 찾을 수 없습니다.' });
     }
 
-    // 트랜잭션으로 요청 승인 및 사용자 생성/업데이트
     await prisma.$transaction([
       prisma.accessRequest.update({
         where: { id: parseInt(id) },
@@ -189,7 +167,7 @@ app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
   }
 });
 
-// 일괄 승인 API (/api 제거)
+// 일괄 승인 API
 app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
   const { emails } = req.body;
   
@@ -219,7 +197,7 @@ app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
   }
 });
 
-// 일괄 삭제 API (/api 제거)
+// 일괄 삭제 API
 app.post('/admin/users/delete-many', checkAdmin, async (req, res) => {
   const { emails } = req.body;
   
@@ -255,5 +233,4 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Vercel Serverless Function export
 export default app; 
