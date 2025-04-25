@@ -96,7 +96,7 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const response = await axios.post('/api/approve-many', {
+      const response = await axios.post('/api/admin/users/approve-many', {
         emails: Array.from(selected)
       });
 
@@ -128,7 +128,7 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const response = await axios.post('/api/delete-many', {
+      const response = await axios.post('/api/admin/users/delete-many', {
         emails: Array.from(selected)
       });
 
