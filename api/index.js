@@ -1,27 +1,12 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import { fileURLToPath } from 'url';
-import path from 'path';
-
-dotenv.config();
 
 const prisma = new PrismaClient();
 const app = express();
 
-// ESM에서 __dirname 설정
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const distPath = path.resolve(__dirname, '../dist');
-
-// CORS 설정 - 모든 출처 허용
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'user-email']
-}));
-
+// CORS 설정
+app.use(cors());
 app.use(express.json());
 
 // 관리자 이메일 목록
@@ -169,68 +154,28 @@ app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
 
 // 일괄 승인 API
 app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
-  const { emails } = req.body;
-  
+  const { emails } = req.body || {};
   if (!Array.isArray(emails) || !emails.length) {
-    return res.status(400).json({ message: '유효한 이메일 배열이 필요합니다.' });
+    return res.status(400).json({ message: 'emails array required' });
   }
-
-  try {
-    await prisma.user.updateMany({
-      where: { email: { in: emails } },
-      data: { 
-        isApproved: true,
-        updatedAt: new Date()
-      }
-    });
-
-    res.json({ 
-      ok: true, 
-      count: emails.length,
-      message: `${emails.length}명의 사용자가 승인되었습니다.`
-    });
-  } catch (error) {
-    console.error('일괄 승인 처리 중 오류:', error);
-    res.status(500).json({ 
-      message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' 
-    });
-  }
+  await prisma.user.updateMany({
+    where: { email: { in: emails } },
+    data: { deleted: false, status: '활성', updatedAt: new Date() },
+  });
+  res.json({ ok: true, count: emails.length });
 });
 
 // 일괄 삭제 API
 app.post('/admin/users/delete-many', checkAdmin, async (req, res) => {
-  const { emails } = req.body;
-  
+  const { emails } = req.body || {};
   if (!Array.isArray(emails) || !emails.length) {
-    return res.status(400).json({ message: '유효한 이메일 배열이 필요합니다.' });
+    return res.status(400).json({ message: 'emails array required' });
   }
-
-  try {
-    await prisma.user.updateMany({
-      where: { email: { in: emails } },
-      data: { 
-        deleted: true,
-        deletedAt: new Date(),
-        updatedAt: new Date()
-      }
-    });
-
-    res.json({ 
-      ok: true, 
-      count: emails.length,
-      message: `${emails.length}명의 사용자가 삭제되었습니다.`
-    });
-  } catch (error) {
-    console.error('일괄 삭제 처리 중 오류:', error);
-    res.status(500).json({ 
-      message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' 
-    });
-  }
-});
-
-// SPA를 위한 catch-all
-app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+  await prisma.user.updateMany({
+    where: { email: { in: emails } },
+    data: { deleted: true, deletedAt: new Date() },
+  });
+  res.json({ ok: true, count: emails.length });
 });
 
 export default app; 
