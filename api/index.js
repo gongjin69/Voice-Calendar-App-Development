@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import adminRoutes from './routes/admin.js';
-import emailRoutes from './routes/email.js';
+import adminRoutes from '../server/routes/admin.js';
+import emailRoutes from '../server/routes/email.js';
 
 dotenv.config();
 
@@ -41,16 +41,13 @@ const checkAdmin = (req, res, next) => {
 };
 
 // 헬스 체크 - 강화된 버전
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   // CORS 헤더 직접 설정
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   
   try {
-    // 데이터베이스 연결 테스트 (옵션)
-    // await prisma.$queryRaw`SELECT 1`;
-    
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -66,12 +63,12 @@ app.get('/api/health', (req, res) => {
   }
 });
 
-// 관리자 및 이메일 API 라우트
-app.use('/api/admin', adminRoutes);
-app.use('/api/email', emailRoutes);
+// 관리자 및 이메일 API 라우트 (/api 제거)
+app.use('/admin', adminRoutes);
+app.use('/email', emailRoutes);
 
 // 사용자 승인 상태 확인
-app.get('/api/users/approval-status/:email', async (req, res) => {
+app.get('/users/approval-status/:email', async (req, res) => {
   const { email } = req.params;
   try {
     const user = await prisma.user.findUnique({
@@ -96,7 +93,7 @@ app.get('/api/users/approval-status/:email', async (req, res) => {
 });
 
 // 접근 요청 생성
-app.post('/api/access-requests', async (req, res) => {
+app.post('/access-requests', async (req, res) => {
   const { email, name } = req.body;
   
   try {
@@ -127,7 +124,7 @@ app.post('/api/access-requests', async (req, res) => {
 });
 
 // 모든 사용자 목록 조회
-app.get('/api/users', checkAdmin, async (req, res) => {
+app.get('/users', checkAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' }
@@ -140,7 +137,7 @@ app.get('/api/users', checkAdmin, async (req, res) => {
 });
 
 // 접근 요청 목록 조회
-app.get('/api/access-requests', checkAdmin, async (req, res) => {
+app.get('/access-requests', checkAdmin, async (req, res) => {
   try {
     const requests = await prisma.accessRequest.findMany({
       where: { status: 'PENDING' },
@@ -154,7 +151,7 @@ app.get('/api/access-requests', checkAdmin, async (req, res) => {
 });
 
 // 접근 요청 승인
-app.post('/api/access-requests/:id/approve', checkAdmin, async (req, res) => {
+app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
   const { id } = req.params;
   
   try {
@@ -192,8 +189,8 @@ app.post('/api/access-requests/:id/approve', checkAdmin, async (req, res) => {
   }
 });
 
-// 일괄 승인 API
-app.post('/api/admin/users/approve-many', checkAdmin, async (req, res) => {
+// 일괄 승인 API (/api 제거)
+app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
   const { emails } = req.body;
   
   if (!Array.isArray(emails) || !emails.length) {
@@ -222,8 +219,8 @@ app.post('/api/admin/users/approve-many', checkAdmin, async (req, res) => {
   }
 });
 
-// 일괄 삭제 API
-app.post('/api/admin/users/delete-many', checkAdmin, async (req, res) => {
+// 일괄 삭제 API (/api 제거)
+app.post('/admin/users/delete-many', checkAdmin, async (req, res) => {
   const { emails } = req.body;
   
   if (!Array.isArray(emails) || !emails.length) {
