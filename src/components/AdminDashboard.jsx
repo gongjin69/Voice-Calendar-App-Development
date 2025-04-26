@@ -114,7 +114,7 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       console.log('일괄 승인 시작, 선택된 이메일:', Array.from(selected));
-      const response = await axios.post('/api/admin/users/approve-many', {
+      const response = await axios.post('/api/admin/approve-many', {
         emails: Array.from(selected)
       });
 
@@ -156,7 +156,7 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       console.log('일괄 삭제 시작, 선택된 이메일:', Array.from(selected));
-      const response = await axios.post('/api/admin/users/delete-many', {
+      const response = await axios.post('/api/admin/delete-many', {
         emails: Array.from(selected)
       });
 
@@ -421,7 +421,18 @@ const AdminDashboard = ({ userEmail }) => {
                       <div className="flex gap-2">
                         {!user.isApproved && (
                           <button
-                            onClick={() => handleApproval(user.email, true)}
+                            onClick={() => {
+                              axios.post("/api/admin/approve-many", { emails: [user.email] })
+                                .then(() => {
+                                  setUsers(prevUsers => 
+                                    prevUsers.map(x => 
+                                      x.email === user.email ? {...x, isApproved: true} : x
+                                    )
+                                  );
+                                  alert("승인 완료");
+                                })
+                                .catch(() => alert("승인 실패"));
+                            }}
                             className="text-emerald-600 hover:text-emerald-700 hover:underline"
                           >
                             승인
