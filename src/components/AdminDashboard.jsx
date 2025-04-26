@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './AdminDashboard.css';
 
+// 사용자 승인 상태 확인 함수
+function checkApprovalStatus(user) {
+  return user && (user.isApproved === true || user.approved === true);
+}
+
 const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
 
 /**
@@ -101,12 +106,21 @@ const AdminDashboard = ({ userEmail }) => {
       });
 
       if (response.status === 200) {
+        // 응답 데이터 확인
+        console.log('일괄 승인 응답:', response.data);
+        
+        // 업데이트된 사용자 목록에 승인 상태 적용
         setUsers(prevUsers => 
-          prevUsers.map(user => 
-            selected.has(user.email) 
-              ? { ...user, isApproved: true }
-              : user
-          )
+          prevUsers.map(user => {
+            if (selected.has(user.email)) {
+              // 승인 상태 설정
+              const updatedUser = { ...user, isApproved: true };
+              // 승인 상태 확인
+              console.log('사용자 승인 상태:', user.email, checkApprovalStatus(updatedUser));
+              return updatedUser;
+            }
+            return user;
+          })
         );
         
         setSelected(new Set());
