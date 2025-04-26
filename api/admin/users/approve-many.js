@@ -25,6 +25,10 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('다수 사용자 승인 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ 
+      error: '서버 오류가 발생했습니다.', 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'production' ? null : error.stack 
+    });
   }
 } 
