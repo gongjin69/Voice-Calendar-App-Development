@@ -148,7 +148,7 @@ app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
 });
 
 // 일괄 승인 API
-app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
+app.post('/admin/approve-many', checkAdmin, async (req, res) => {
   const { emails } = req.body || {};
   if (!Array.isArray(emails) || !emails.length) {
     return res.status(400).json({ message: 'emails array required' });
@@ -161,7 +161,7 @@ app.post('/admin/users/approve-many', checkAdmin, async (req, res) => {
 });
 
 // 일괄 삭제 API
-app.post('/admin/users/delete-many', checkAdmin, async (req, res) => {
+app.post('/admin/delete-many', checkAdmin, async (req, res) => {
   const { emails } = req.body || {};
   if (!Array.isArray(emails) || !emails.length) {
     return res.status(400).json({ message: 'emails array required' });
