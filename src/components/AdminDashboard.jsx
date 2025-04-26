@@ -195,9 +195,8 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      await axios.post('/api/admin/approve-user', {
-        email,
-        approved: approve
+      await axios.post('/api/admin/approve-many', {
+        emails: [email]
       });
 
       setUsers(prevUsers => {
@@ -252,7 +251,9 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      await axios.post(`/api/admin/users/${email}/restore`);
+      await axios.post(`/api/admin/restore-user`, {
+        email
+      });
       
       setUsers(prevUsers => {
         if (!Array.isArray(prevUsers)) return prevUsers;
