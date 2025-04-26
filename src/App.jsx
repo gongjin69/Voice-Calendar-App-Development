@@ -345,8 +345,8 @@ function App() {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        // 배포된 URL로 직접 요청
-        const response = await axios.get('https://ewc-voice-calendar-app.vercel.app/api/health', {
+        // 상대 경로로 요청
+        const response = await axios.get('/api/health', {
           timeout: 5000, // 5초 타임아웃 설정
           validateStatus: (status) => status === 200 // 200 상태 코드만 성공으로 처리
         });
@@ -725,52 +725,14 @@ function App() {
     });
   };
 
-  // 승인 상태 확인
-  const checkApprovalStatus = async () => {
-    try {
-      // 관리자 계정인 경우 자동으로 승인 처리
-      if (ADMIN_EMAILS.includes(userEmail)) {
-        console.log('관리자 계정으로 자동 승인 처리');
-        setIsApproved(true);
-        return;
-      }
-      
-      // 로컬 개발 환경 또는 실제 배포된 URL 사용
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      console.log('API 접근 URL:', baseUrl);
-      
-      const response = await axios.get(`${baseUrl}/api/users/approval-status/${userEmail}`, {
-        timeout: 8000, // 타임아웃 증가
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-      
-      console.log('승인 상태 응답:', response.data);
-      setIsApproved(response.data.isApproved);
-      setAccessRequestSent(response.data.requestExists);
-    } catch (error) {
-      console.error('승인 상태 확인 실패:', error.message || error);
-      // 서버 응답이 없으면 개발 편의를 위해 임시로 접근 허용 (실제 프로덕션에서는 제거)
-      if (process.env.NODE_ENV === 'development' || !import.meta.env.PROD) {
-        console.log('개발 환경에서 자동 승인 처리');
-        setIsApproved(true);
-      }
-    }
-  };
-
   // 접근 권한 요청
   const requestAccess = async () => {
     try {
       // 로딩 표시
       setIsLoading(true);
       
-      // 로컬 개발 환경 또는 실제 배포된 URL 사용
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      
       // 접근 요청 생성
-      await axios.post(`${baseUrl}/api/access-requests`, {
+      await axios.post('/api/access-requests', {
         email: userEmail,
         name: userEmail.split('@')[0],
       }, {
@@ -782,7 +744,7 @@ function App() {
       });
 
       // 마스터 관리자에게 이메일 발송
-      await axios.post(`${baseUrl}/api/send-email`, {
+      await axios.post('/api/send-email', {
         to: MASTER_ADMIN_EMAIL,
         subject: '새로운 사용자 접근 요청',
         text: `

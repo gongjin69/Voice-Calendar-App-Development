@@ -37,8 +37,7 @@ const AdminDashboard = ({ userEmail }) => {
       setError(null);
       setSelected(new Set()); // 선택 초기화
       
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      const response = await axios.get(`${baseUrl}/api/admin/users`);
+      const response = await axios.get('/api/admin/users');
       
       // 응답 데이터 검증 및 처리
       const userData = response.data;
@@ -97,8 +96,7 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       console.log('일괄 승인 시작, 선택된 이메일:', Array.from(selected));
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      const response = await axios.post(`${baseUrl}/api/admin/users/approve-many`, {
+      const response = await axios.post('/api/admin/users/approve-many', {
         emails: Array.from(selected)
       });
 
@@ -131,8 +129,7 @@ const AdminDashboard = ({ userEmail }) => {
 
     try {
       console.log('일괄 삭제 시작, 선택된 이메일:', Array.from(selected));
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      const response = await axios.post(`${baseUrl}/api/admin/users/delete-many`, {
+      const response = await axios.post('/api/admin/users/delete-many', {
         emails: Array.from(selected)
       });
 
@@ -164,8 +161,7 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      await axios.post(`${baseUrl}/api/admin/approve-user`, {
+      await axios.post('/api/admin/approve-user', {
         email,
         approved: approve
       });
@@ -197,8 +193,7 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      await axios.delete(`${baseUrl}/api/admin/users/${email}`);
+      await axios.delete(`/api/admin/users/${email}`);
       
       setUsers(prevUsers => {
         if (!Array.isArray(prevUsers)) return prevUsers;
@@ -223,8 +218,7 @@ const AdminDashboard = ({ userEmail }) => {
     }
 
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ewc-voice-calendar-app.vercel.app';
-      await axios.post(`${baseUrl}/api/admin/users/${email}/restore`);
+      await axios.post(`/api/admin/users/${email}/restore`);
       
       setUsers(prevUsers => {
         if (!Array.isArray(prevUsers)) return prevUsers;
