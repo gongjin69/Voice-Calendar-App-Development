@@ -341,6 +341,11 @@ function App() {
     );
   };
 
+  // 서버 연결 확인 함수
+  const checkHealthStatus = (data) => {
+    return data && (data.ok === true || data.status === 'ok');
+  };
+
   // 서버 연결 확인
   useEffect(() => {
     const checkServer = async () => {
@@ -353,7 +358,7 @@ function App() {
         
         console.log('서버 연결 응답:', response.data);
         // 응답이 올바른지 확인
-        if (response.data && (response.data.ok === true || response.data.status === 'ok')) {
+        if (checkHealthStatus(response.data)) {
           setIsServerConnected(true);
         } else {
           setIsServerConnected(false);
@@ -376,6 +381,37 @@ function App() {
       checkApprovalStatus();
     }
   }, [userEmail]);
+
+  // 승인 상태 확인 함수
+  const checkApprovalStatus = async () => {
+    try {
+      // 관리자 계정인 경우 자동으로 승인 처리
+      if (ADMIN_EMAILS.includes(userEmail)) {
+        console.log('관리자 계정으로 자동 승인 처리');
+        setIsApproved(true);
+        return;
+      }
+      
+      const response = await axios.get(`/api/users/approval-status/${userEmail}`, {
+        timeout: 8000, // 타임아웃 증가
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+      
+      console.log('승인 상태 응답:', response.data);
+      setIsApproved(response.data.isApproved);
+      setAccessRequestSent(response.data.requestExists);
+    } catch (error) {
+      console.error('승인 상태 확인 실패:', error.message || error);
+      // 서버 응답이 없으면 개발 편의를 위해 임시로 접근 허용 (실제 프로덕션에서는 제거)
+      if (process.env.NODE_ENV === 'development' || !import.meta.env.PROD) {
+        console.log('개발 환경에서 자동 승인 처리');
+        setIsApproved(true);
+      }
+    }
+  };
 
   // 일정 조회 함수 개선
   const fetchRecentEvents = async () => {
