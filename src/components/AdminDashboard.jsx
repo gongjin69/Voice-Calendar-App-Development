@@ -27,6 +27,19 @@ const AdminDashboard = ({ userEmail }) => {
   const [showDeleted, setShowDeleted] = useState(false);
   const [selected, setSelected] = useState(new Set());
 
+  // 전역 함수로 정의하여 번들링 문제 해결
+  useEffect(() => {
+    // checkApprovalStatus 함수를 전역 스코프에 추가
+    window.checkApprovalStatus = function(user) {
+      return user && (user.isApproved === true || user.approved === true);
+    };
+    
+    return () => {
+      // 컴포넌트 언마운트 시 전역 함수 제거
+      delete window.checkApprovalStatus;
+    };
+  }, []);
+
   useEffect(() => {
     if (!ADMIN_EMAILS.includes(userEmail)) {
       setError('관리자 권한이 없습니다.');
@@ -148,12 +161,19 @@ const AdminDashboard = ({ userEmail }) => {
       });
 
       if (response.status === 200) {
+        // 응답 데이터 확인
+        console.log('일괄 삭제 응답:', response.data);
+        
+        // 업데이트된 사용자 목록에 삭제 상태 적용
         setUsers(prevUsers => 
-          prevUsers.map(user => 
-            selected.has(user.email) 
-              ? { ...user, deleted: true }
-              : user
-          )
+          prevUsers.map(user => {
+            if (selected.has(user.email)) {
+              // 삭제 상태 설정
+              const updatedUser = { ...user, deleted: true };
+              return updatedUser;
+            }
+            return user;
+          })
         );
         
         setSelected(new Set());
