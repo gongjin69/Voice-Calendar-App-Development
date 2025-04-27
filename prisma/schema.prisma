@@ -1,7 +1,6 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public"]
 }
 
 generator client {
@@ -22,7 +21,6 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("users")
-  @@schema("public")
 }
 
 model AccessRequest {
@@ -34,5 +32,4 @@ model AccessRequest {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("access_requests")
-  @@schema("public")
 } 
