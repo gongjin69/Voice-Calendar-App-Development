@@ -1,15 +1,23 @@
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
 import serverless from 'serverless-http';
+import { PrismaClient } from '@prisma/client';
 
-// Prisma 클라이언트 초기화 시 명시적 로그 설정
+// 라우터 가져오기
+import healthRouter from './routes/health';
+import dbTestRouter from './routes/db-test';
+import usersRouter from './routes/users';
+import adminUsersRouter from './routes/admin/users';
+import accessRequestsRouter from './routes/access-requests';
+
+// Prisma 클라이언트 초기화
 const prisma = new PrismaClient({
   log: ['query', 'info', 'warn', 'error'],
 });
+
 const app = express();
 
-// CORS 설정
+// CORS 및 JSON 미들웨어 설정
 app.use(cors());
 app.use(express.json());
 
@@ -25,14 +33,26 @@ const checkAdmin = (req, res, next) => {
   next();
 };
 
-// 헬스 체크
-app.get('/health', (req, res) => {
-  res.json({ ok: true, status: 'ok', timestamp: Date.now() });
-});
+// 모든 API 경로에 /api/ 접두사 사용
+app.use('/api/health', healthRouter);
+app.use('/api/db-test', dbTestRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/admin/users', adminUsersRouter);
+app.use('/api/access-requests', accessRequestsRouter);
 
-// DB 테스트 엔드포인트 추가
-app.get('/api/db-test', (req, res) => {
-  res.json({ test: 1, now: new Date().toISOString() });
+// 루트 경로 핸들러 - API 문서화를 위한 간단한 응답
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Voice Calendar API',
+    version: '1.0.0',
+    endpoints: [
+      '/api/health',
+      '/api/db-test',
+      '/api/users/approval-status/:email',
+      '/api/access-requests',
+      '/api/admin/users'
+    ]
+  });
 });
 
 // 사용자 승인 상태 확인

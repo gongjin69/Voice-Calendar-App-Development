@@ -1,17 +1,31 @@
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+// Prisma 클라이언트 초기화
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
 });
 
 export default async function handler(req, res) {
   try {
-    console.log('데이터베이스 URL:', process.env.DATABASE_URL); // 연결 문자열 로깅 (디버깅용)
-    const { rows } = await pool.query('SELECT 1 AS test, NOW() AS now');
-    res.status(200).json(rows);
+    // 데이터베이스 연결 테스트 - 간단한 쿼리 실행
+    const result = await prisma.$queryRaw`SELECT NOW()`;
+    
+    // 성공 응답
+    res.status(200).json({
+      ok: true,
+      message: 'Database connection successful',
+      timestamp: new Date().toISOString(),
+      result: result
+    });
   } catch (error) {
-    console.error('DB 연결 실패:', error);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    console.error('데이터베이스 연결 실패:', error);
+    
+    // 오류 응답
+    res.status(500).json({
+      ok: false,
+      message: 'Database connection failed',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 } 
