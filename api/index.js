@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
+import serverless from 'serverless-http';
 
 // Prisma 클라이언트 초기화 시 명시적 로그 설정
 const prisma = new PrismaClient({
@@ -27,6 +28,11 @@ const checkAdmin = (req, res, next) => {
 // 헬스 체크
 app.get('/health', (req, res) => {
   res.json({ ok: true, status: 'ok', timestamp: Date.now() });
+});
+
+// DB 테스트 엔드포인트 추가
+app.get('/api/db-test', (req, res) => {
+  res.json({ test: 1, now: new Date().toISOString() });
 });
 
 // 사용자 승인 상태 확인
@@ -179,12 +185,5 @@ app.post('/admin/delete-many', checkAdmin, async (req, res) => {
   }
 });
 
-// Vercel Serverless Function 핸들러
-// 이 부분이 Vercel Functions에서 필요한 핸들러 형식입니다
-export default function handler(req, res) {
-  // Express 앱에 요청 전달
-  return app(req, res);
-}
-
-// Express 앱도 그대로 내보내기 (다른 환경에서 사용 가능)
-export { app }; 
+// serverless-http를 사용하여 Express 앱을 래핑
+export default serverless(app); 

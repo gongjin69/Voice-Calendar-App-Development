@@ -1,11 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/index.js": {
-      "runtime": "nodejs20.x"
-    },
-    "api/admin/*.js": {
-      "runtime": "nodejs20.x"
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
