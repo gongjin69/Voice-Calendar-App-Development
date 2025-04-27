@@ -1,8 +1,16 @@
 // api/health.js
+import { PrismaClient } from '@prisma/client';
+
+// Prisma 클라이언트 초기화 (옵션)
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
+
 export default function handler(req, res) {
-  res.json({
-    ok: true,            // 프런트 기존 로직 호환용
-    status: 'ok',        // 새 구조
-    timestamp: Date.now()
+  res.status(200).json({ 
+    ok: true, 
+    status: 'ok', 
+    timestamp: Date.now(),
+    message: 'API server is running'
   });
 } 
