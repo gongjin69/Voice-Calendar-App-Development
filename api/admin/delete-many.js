@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 
 // Prisma 클라이언트 초기화
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
 
 // ADMIN_EMAILS 배열 - 관리자 이메일 목록
 const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
@@ -26,11 +28,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'emails array required' });
     }
     
-    // 사용자 일괄 삭제 (소프트 삭제)
-    await prisma.user.updateMany({
-      where: { email: { in: emails } },
-      data: { deleted: true, deletedAt: new Date() },
-    });
+    // SQL 쿼리로 직접 실행
+    const emailsString = emails.map(email => `'${email}'`).join(',');
+    await prisma.$executeRaw`UPDATE "users" SET "deleted" = true, "deleted_at" = ${new Date()} WHERE "email" IN (${prisma.raw(emailsString)})`;
     
     return res.status(200).json({ ok: true, count: emails.length });
   } catch (error) {
