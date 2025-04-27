@@ -179,4 +179,12 @@ app.post('/admin/delete-many', checkAdmin, async (req, res) => {
   }
 });
 
-export default app; 
+// Vercel Serverless Function 핸들러
+// 이 부분이 Vercel Functions에서 필요한 핸들러 형식입니다
+export default function handler(req, res) {
+  // Express 앱에 요청 전달
+  return app(req, res);
+}
+
+// Express 앱도 그대로 내보내기 (다른 환경에서 사용 가능)
+export { app }; 
