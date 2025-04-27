@@ -2,7 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Prisma 클라이언트 초기화 시 명시적 로그 설정
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
 const app = express();
 
 // CORS 설정
@@ -23,7 +26,7 @@ const checkAdmin = (req, res, next) => {
 
 // 헬스 체크
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ ok: true, status: 'ok', timestamp: Date.now() });
 });
 
 // 사용자 승인 상태 확인
@@ -47,7 +50,7 @@ app.get('/users/approval-status/:email', async (req, res) => {
     });
   } catch (error) {
     console.error('사용자 승인 상태 조회 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 
@@ -78,34 +81,31 @@ app.post('/access-requests', async (req, res) => {
     res.status(201).json({ message: '접근 요청이 생성되었습니다.' });
   } catch (error) {
     console.error('접근 요청 생성 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 
 // 모든 사용자 목록 조회
 app.get('/users', checkAdmin, async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    // 직접 SQL 쿼리 실행 (문제 해결용)
+    const users = await prisma.$queryRaw`SELECT * FROM "users" ORDER BY "created_at" DESC`;
     res.json(users);
   } catch (error) {
     console.error('사용자 목록 조회 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 
 // 접근 요청 목록 조회
 app.get('/access-requests', checkAdmin, async (req, res) => {
   try {
-    const requests = await prisma.accessRequest.findMany({
-      where: { status: 'PENDING' },
-      orderBy: { createdAt: 'desc' }
-    });
+    // 직접 SQL 쿼리 실행 (문제 해결용)
+    const requests = await prisma.$queryRaw`SELECT * FROM "access_requests" WHERE "status" = 'PENDING' ORDER BY "created_at" DESC`;
     res.json(requests);
   } catch (error) {
     console.error('접근 요청 목록 조회 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 
@@ -143,7 +143,7 @@ app.post('/access-requests/:id/approve', checkAdmin, async (req, res) => {
     res.json({ message: '접근 요청이 승인되었습니다.' });
   } catch (error) {
     console.error('접근 요청 승인 실패:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
   }
 });
 
@@ -153,11 +153,14 @@ app.post('/admin/approve-many', checkAdmin, async (req, res) => {
   if (!Array.isArray(emails) || !emails.length) {
     return res.status(400).json({ message: 'emails array required' });
   }
-  await prisma.user.updateMany({
-    where: { email: { in: emails } },
-    data: { deleted: false, status: '활성', updatedAt: new Date() },
-  });
-  res.json({ ok: true, count: emails.length });
+  
+  try {
+    await prisma.$executeRaw`UPDATE "users" SET "deleted" = false, "status" = '활성', "updated_at" = ${new Date()} WHERE "email" IN (${emails.join(',')})`;
+    res.json({ ok: true, count: emails.length });
+  } catch (error) {
+    console.error('일괄 승인 실패:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
+  }
 });
 
 // 일괄 삭제 API
@@ -166,11 +169,14 @@ app.post('/admin/delete-many', checkAdmin, async (req, res) => {
   if (!Array.isArray(emails) || !emails.length) {
     return res.status(400).json({ message: 'emails array required' });
   }
-  await prisma.user.updateMany({
-    where: { email: { in: emails } },
-    data: { deleted: true, deletedAt: new Date() },
-  });
-  res.json({ ok: true, count: emails.length });
+  
+  try {
+    await prisma.$executeRaw`UPDATE "users" SET "deleted" = true, "deleted_at" = ${new Date()} WHERE "email" IN (${emails.join(',')})`;
+    res.json({ ok: true, count: emails.length });
+  } catch (error) {
+    console.error('일괄 삭제 실패:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.', message: error.message });
+  }
 });
 
 export default app; 
