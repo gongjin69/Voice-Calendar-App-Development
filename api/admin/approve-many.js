@@ -5,20 +5,20 @@ const prisma = new PrismaClient({
   log: ['query', 'info', 'warn', 'error'],
 });
 
-// ADMIN_EMAILS 배열 - 관리자 이메일 목록
-const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
+// ADMIN_EMAILS 배열 - 참조용으로 남겨둠
+// const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
 
 export default async function handler(req, res) {
-  // POST 요청 확인
+  // POST 요청 확인 (인증 체크 제거)
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  // 관리자 권한 확인
-  const userEmail = req.headers['user-email'];
-  if (!userEmail || !ADMIN_EMAILS.includes(userEmail)) {
-    return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
-  }
+  // 인증 체크 임시 제거
+  // const userEmail = req.headers['user-email'];
+  // if (!userEmail || !ADMIN_EMAILS.includes(userEmail)) {
+  //   return res.status(403).json({ error: '관리자 권한이 필요합니다.' });
+  // }
 
   try {
     const { emails } = req.body || {};

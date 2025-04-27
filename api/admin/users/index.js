@@ -3,8 +3,11 @@ const prisma = new PrismaClient({
   log: ['query', 'info', 'warn', 'error'],
 });
 
+// 관리자 이메일 목록 - 참조용으로 남겨둠
+// const ADMIN_EMAILS = ['cspark69@ewckids.com', 'mo@ewckids.com'];
+
 export default async function handler(req, res) {
-  // GET만 허용
+  // GET만 허용 (인증 체크 제거)
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
