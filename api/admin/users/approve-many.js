@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 
-// Prisma 클라이언트 초기화
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // ADMIN_EMAILS 배열 - 참조용으로 남겨둠
@@ -28,11 +28,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'emails array required' });
     }
     
-    // SQL 쿼리로 직접 실행
-    const emailsString = emails.map(email => `'${email}'`).join(',');
-    await prisma.$executeRaw`UPDATE "users" SET "deleted" = false, "is_approved" = true, "status" = '활성', "updated_at" = ${new Date()} WHERE "email" IN (${prisma.raw(emailsString)})`;
+    // 이메일 목록을 쿼리 파라미터로 사용
+    const emailList = emails.map(email => `'${email}'`).join(',');
+    const query = `UPDATE users SET deleted = false, is_approved = true, status = '활성', updated_at = NOW() WHERE email IN (${emailList})`;
     
-    return res.status(200).json({ ok: true, count: emails.length });
+    const result = await pool.query(query);
+    return res.status(200).json({ ok: true, count: result.rowCount });
   } catch (error) {
     console.error('일괄 승인 중 오류 발생:', error);
     return res.status(500).json({
