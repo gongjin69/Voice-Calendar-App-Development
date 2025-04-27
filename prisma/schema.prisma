@@ -1,6 +1,7 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public"]
 }
 
 generator client {
@@ -12,9 +13,16 @@ model User {
   email       String   @unique
   name        String
   phone       String?
-  isApproved  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  lastLoginAt DateTime @default(now())
+  isApproved  Boolean  @default(false) @map("is_approved")
+  createdAt   DateTime @default(now()) @map("created_at")
+  lastLoginAt DateTime @default(now()) @map("last_login_at")
+  deleted     Boolean  @default(false)
+  deletedAt   DateTime? @map("deleted_at")
+  status      String?  @default("대기중")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@schema("public")
 }
 
 model AccessRequest {
@@ -22,6 +30,9 @@ model AccessRequest {
   email      String
   name       String
   status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("access_requests")
+  @@schema("public")
 } 
